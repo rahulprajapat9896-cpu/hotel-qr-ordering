@@ -1,7 +1,7 @@
 'use client';
 
 const TABLES = ['T1', 'T2', 'T3', 'T4'];
-const BASE = 'https://hotel-qr-ordering.vercel.app';
+const BASE = 'https://hotel-qr-ordering-alpha.vercel.app';
 
 export default function QrPrintPage() {
   return (

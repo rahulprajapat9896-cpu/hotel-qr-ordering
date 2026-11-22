@@ -41,14 +41,23 @@ function HomeInner() {
   const [newDish, setNewDish] = useState({ name: '', category: 'Starters', price: '' });
   const prevReady = useRef(new Set());
 
-  // --- QR deep link: ?table=T1..T4 (and optional ?view=customer) ---
+  // --- Separate links: ?table=T1..T4 locks to Customer, ?view=manager/chef/waiter/customer locks to that page ---
+  // A customer who scanned a table QR must never see the staff switcher.
+  // Each role has its own link: /?table=T1 (customer), /?view=manager, /?view=chef, /?view=waiter.
+  // Plain / with no params still shows the switcher (for testing).
+  const tableParam = (params.get('table') || '').toUpperCase();
+  const isCustomerLocked = TABLES.includes(tableParam);
+  // Separate links: ?view=manager / chef / waiter / customer also lock to that page only.
+  const viewParam = (params.get('view') || '').toLowerCase();
+  const isViewLocked = ['customer', 'manager', 'chef', 'waiter'].includes(viewParam);
+  const isLocked = isCustomerLocked || isViewLocked;
   useEffect(() => {
-    const t = (params.get('table') || '').toUpperCase();
+    const t = tableParam;
     if (TABLES.includes(t)) setTable(t);
+    if (TABLES.includes(t)) { setView('customer'); return; }
     const v = (params.get('view') || '').toLowerCase();
     if (['customer', 'manager', 'chef', 'waiter'].includes(v)) setView(v);
-    else if (TABLES.includes(t)) setView('customer');
-  }, [params]);
+  }, [params, tableParam]);
 
   const fetchData = useCallback(async () => {
     if (!supabase) return;
@@ -145,17 +154,19 @@ function HomeInner() {
   const revenue = orders.filter((o) => o.status !== 'rejected').reduce((s, o) => s + Number(o.total || 0), 0);
   const visibleMenu = menu.filter((d) => (cat === 'All' || d.category === cat) && d.available !== false);
   const slideDish = highlights[slide % Math.max(1, highlights.length)];
-  const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://hotel-qr-ordering.vercel.app';
+  const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://hotel-qr-ordering-alpha.vercel.app';
 
   return (
     <div>
       <header className="topbar">
         <h1>🍽️ Hotel <span>QR Ordering</span></h1>
-        <nav className="switcher">
-          {['customer', 'manager', 'chef', 'waiter'].map((v) => (
-            <button key={v} className={view === v ? 'active' : ''} onClick={() => setView(v)}>{v[0].toUpperCase() + v.slice(1)}</button>
-          ))}
-        </nav>
+        {!isLocked && (
+          <nav className="switcher">
+            {['customer', 'manager', 'chef', 'waiter'].map((v) => (
+              <button key={v} className={view === v ? 'active' : ''} onClick={() => setView(v)}>{v[0].toUpperCase() + v.slice(1)}</button>
+            ))}
+          </nav>
+        )}
       </header>
       {!isSupabaseConfigured && <div className="wrap"><div className="card" style={{ background: '#fff3cd' }}>Demo mode: Supabase is not configured yet — orders are kept in this browser only. Set <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> in Vercel to go live (see README).</div></div>}
       <div className="wrap">
