@@ -1,7 +1,7 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'Hotel QR Ordering',
+  title: 'Rahul Restaurant — QR Ordering',
   description: 'Scan, order, track — Customer, Manager, Chef and Waiter in one app.'
 };
 

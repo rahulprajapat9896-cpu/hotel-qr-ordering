@@ -73,7 +73,7 @@ label { font-size: 13px; font-weight: 800; }
 /* Receipt shown when the order is served / completed */
 .receipt { border: 2px dashed #d8c9b8; border-radius: 14px; padding: 18px; background: #fffdf7; margin-top: 12px; }
 .receipt h3 { margin: 0 0 4px; }
-/* SAVOR manager dashboard — dark green sidebar + cream main, same design language for all pages */
+/* RAHUL Restaurant dashboard — dark green sidebar + cream main, same design language for all pages */
 .topbar { background: linear-gradient(90deg, #0d2b1a, #143d24 70%, #1d5233); }
 .savor { display: flex; min-height: 80vh; margin: -20px -16px -80px; }
 .savor-side { width: 230px; flex-shrink: 0; background: linear-gradient(180deg, #0d2b1a, #0a2113); color: #fff; padding: 22px 14px; display: flex; flex-direction: column; gap: 18px; position: sticky; top: 0; align-self: flex-start; min-height: 100vh; }

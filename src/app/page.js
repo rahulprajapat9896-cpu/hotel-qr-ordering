@@ -187,7 +187,7 @@ function HomeInner() {
   const myOrder = orders.find((o) => String(o.id) === String(myOrderId));
   const avgRating = ratings.length ? (ratings.reduce((s, r) => s + r.stars, 0) / ratings.length).toFixed(1) : '—';
   const revenue = orders.filter((o) => o.status !== 'rejected').reduce((s, o) => s + Number(o.total || 0), 0);
-  // --- SAVOR manager dashboard (real data only, nothing invented) ---
+  // --- RAHUL manager dashboard (real data only, nothing invented) ---
   const mgrHour = new Date().getHours();
   const mgrGreet = mgrHour < 12 ? 'Good morning' : mgrHour < 17 ? 'Good afternoon' : 'Good evening';
   const mgrDate = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
@@ -249,14 +249,14 @@ function HomeInner() {
   const slideDish = highlights[slide % Math.max(1, highlights.length)];
   const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://hotel-qr-ordering-alpha.vercel.app';
 
-  // Staff pages (manager / chef / waiter) have their own SAVOR sidebar header —
+  // Staff pages (manager / chef / waiter) have their own RAHUL sidebar header —
   // the global top header is only for the customer page, so it never doubles up.
   const hideTopHeader = view !== 'customer' || ['manager', 'chef', 'waiter'].includes(viewParam);
   return (
     <div>
       {!hideTopHeader && (
       <header className="topbar">
-        <h1>👨‍🍳 SAVOR <span>Restaurant</span></h1>
+        <h1>👨‍🍳 RAHUL <span>Restaurant</span></h1>
         {view === 'customer' && (
           <nav className="cust-tabs">
             <button className={custTab === 'menu' ? 'active' : ''} onClick={() => setCustTab('menu')}>🍴 Menu</button>
@@ -367,7 +367,7 @@ function HomeInner() {
         {view === 'manager' && (
           <div className="savor">
             <aside className={"savor-side" + (sideOpen ? " open" : "")}>
-              <div className="savor-logo"><span className="savor-hat">👨‍🍳</span><div><b>SAVOR</b><span>RESTAURANT</span></div></div>
+              <div className="savor-logo"><span className="savor-hat">👨‍🍳</span><div><b>RAHUL</b><span>RESTAURANT</span></div></div>
               <nav className="savor-nav">
                 <a className={mgrTab === 'dashboard' ? 'active' : ''} href="/?view=manager&tab=dashboard">▦ Dashboard</a>
                 <a className={mgrTab === 'orders' ? 'active' : ''} href="/?view=manager&tab=orders">⚡ Live Orders {pendingCount > 0 && <span className="savor-badge">{pendingCount}</span>}</a>
@@ -508,7 +508,7 @@ function HomeInner() {
               {mgrTab === 'settings' && (
               <div className="card savor-card">
                 <h2>⚙️ Settings</h2>
-                <p><b>Restaurant:</b> SAVOR</p>
+                <p><b>Restaurant:</b> RAHUL</p>
                 <p><b>Tables:</b> T1, T2, T3, T4</p>
                 <p><b>Payment:</b> UPI (pay at table) and Cash (at counter) — manager confirms receipt.</p>
                 <p><b>GST:</b> 5% on every bill.</p>
@@ -523,7 +523,7 @@ function HomeInner() {
         {view === 'chef' && (
           <div className="savor">
             <aside className={"savor-side" + (sideOpen ? " open" : "")}>
-              <div className="savor-logo"><span className="savor-hat">👨‍🍳</span><div><b>SAVOR</b><span>RESTAURANT</span></div></div>
+              <div className="savor-logo"><span className="savor-hat">👨‍🍳</span><div><b>RAHUL</b><span>RESTAURANT</span></div></div>
               <nav className="savor-nav">
                 <a className={chefTab === 'board' ? 'active' : ''} href="/?view=chef&tab=board">🍳 Kitchen Board</a>
                 <a className={chefTab === 'new' ? 'active' : ''} href="/?view=chef&tab=new">🆕 New Tickets ({orders.filter((o) => o.status === 'sent_to_chef').length})</a>
@@ -552,7 +552,7 @@ function HomeInner() {
         {view === 'waiter' && (
           <div className="savor">
             <aside className={"savor-side" + (sideOpen ? " open" : "")}>
-              <div className="savor-logo"><span className="savor-hat">👨‍🍳</span><div><b>SAVOR</b><span>RESTAURANT</span></div></div>
+              <div className="savor-logo"><span className="savor-hat">👨‍🍳</span><div><b>RAHUL</b><span>RESTAURANT</span></div></div>
               <nav className="savor-nav">
                 <a className={waiterTab === 'board' ? 'active' : ''} href="/?view=waiter&tab=board">🛎️ Pickup Board</a>
                 <a className={waiterTab === 'ready' ? 'active' : ''} href="/?view=waiter&tab=ready">🔔 Ready ({orders.filter((o) => o.status === 'ready').length})</a>
