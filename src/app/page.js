@@ -342,7 +342,6 @@ function HomeInner() {
               <p className="muted">{payment === 'UPI' ? 'Pay at the table on the hotel UPI ID shown by the waiter, then place the order. The manager confirms receipt.' : 'Pay cash at the counter. The manager confirms receipt.'}</p>
               <button className="btn primary" onClick={placeOrder} disabled={!cartItems.length}>Place Order · {fmt(total)}</button>
             </div></div>
-            <div className="card"><div className="row" style={{ justifyContent: 'space-between' }}><span>ℹ️ Enjoy your meal! ❤️</span><button className="btn gold" onClick={placeOrder} disabled={!cartItems.length}>➤ Place Order · {fmt(total)}</button></div></div>
             </>)}
             {custTab === 'orders' && myOrder && (
               <div className="card">
