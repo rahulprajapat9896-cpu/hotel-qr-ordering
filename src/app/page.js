@@ -374,17 +374,16 @@ function ManagerMenu({ menu, setMenu, newDish, setNewDish, fetchData }) {
   }
   return (
     <div className="card"><h2>Menu Management</h2>
-      <div className="row">
-        <input type="text" style={{ flex: 2 }} placeholder="Dish name" value={newDish.name} onChange={(e) => setNewDish({ ...newDish, name: e.target.value })} />
-        <select style={{ flex: 1 }} value={newDish.category} onChange={(e) => setNewDish({ ...newDish, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select>
-        <input type="number" style={{ flex: 1 }} placeholder="Price ₹" value={newDish.price} onChange={(e) => setNewDish({ ...newDish, price: e.target.value })} />
-        <button className="btn primary" onClick={addDish}>Add Dish</button>
-      </div>
-      <div className="row" style={{ marginTop: 8 }}>
-        <label style={{ fontWeight: 600 }}>Dish photo (optional)</label>
-        <input type="file" accept="image/*" onChange={handlePhoto} />
-        {newDish.img && <img src={newDish.img} alt="Dish preview" style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 8 }} />}
-      </div>
+      <label>Dish name</label>
+      <input type="text" placeholder="Dish name" value={newDish.name} onChange={(e) => setNewDish({ ...newDish, name: e.target.value })} />
+      <label>Category</label>
+      <select value={newDish.category} onChange={(e) => setNewDish({ ...newDish, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select>
+      <label>Price (₹)</label>
+      <input type="number" placeholder="Price ₹" value={newDish.price} onChange={(e) => setNewDish({ ...newDish, price: e.target.value })} />
+      <label>Dish photo (optional)</label>
+      <input type="file" accept="image/*" onChange={handlePhoto} />
+      {newDish.img && <img src={newDish.img} alt="Dish preview" style={{ width: 120, height: 90, objectFit: 'cover', borderRadius: 8, marginBottom: 10 }} />}
+      <button className="btn primary" onClick={addDish} style={{ width: '100%' }}>Add Dish</button>
       {menu.map((d) => (
         <div key={d.id} className="row" style={{ justifyContent: 'space-between', borderTop: '1px solid #f0e6d8', padding: '6px 0' }}>
           <span>{d.name} <span className="muted">· {d.category} · {fmt(d.price)} {d.available === false ? '· OFF' : ''}</span></span>
