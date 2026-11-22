@@ -304,7 +304,6 @@ function HomeInner() {
                 <button onClick={() => setNotice('Settings — abhi menu aur QR yahin se manage hote hain.')}>⚙️ Settings</button>
               </nav>
               <div className="savor-mood">Good Food<br />Good Mood</div>
-              <button className="savor-logout" onClick={() => setView('customer')}>← Logout</button>
             </aside>
             <div className="savor-main" id="savor-top">
               <div className="savor-topbar">
@@ -404,8 +403,58 @@ function HomeInner() {
           </div>
         )}
 
-        {view === 'chef' && <ChefBoard orders={orders} updateOrder={updateOrder} />}
-        {view === 'waiter' && <WaiterBoard orders={orders} updateOrder={updateOrder} />}
+        {view === 'chef' && (
+          <div className="savor">
+            <aside className="savor-side">
+              <div className="savor-logo"><span className="savor-hat">👨‍🍳</span><div><b>SAVOR</b><span>RESTAURANT</span></div></div>
+              <nav className="savor-nav">
+                <button className="active" onClick={() => document.getElementById('chef-board')?.scrollIntoView({ behavior: 'smooth' })}>🍳 Kitchen Board</button>
+                <button onClick={() => document.getElementById('chef-board')?.scrollIntoView({ behavior: 'smooth' })}>🆕 New Tickets ({orders.filter((o) => o.status === 'sent_to_chef').length})</button>
+                <button onClick={() => document.getElementById('chef-board')?.scrollIntoView({ behavior: 'smooth' })}>🔥 On the Fire ({orders.filter((o) => o.status === 'preparing').length})</button>
+                <button onClick={() => document.getElementById('chef-board')?.scrollIntoView({ behavior: 'smooth' })}>✅ Ready for Pickup ({orders.filter((o) => o.status === 'ready').length})</button>
+              </nav>
+              <div className="savor-mood">Good Food<br />Good Mood</div>
+            </aside>
+            <div className="savor-main">
+              <div className="savor-greet">
+                <div><h2>{mgrGreet}, Chef 👨‍🍳</h2><p className="muted">Verified orders only — cook them in order, mark Ready when done.</p><p className="muted">📅 {mgrDate}</p></div>
+                <div className="savor-tagline">Eat · Enjoy · Repeat</div>
+              </div>
+              <div className="savor-stats">
+                <div className="savor-stat"><span className="savor-ic gold">🆕</span><div><b>{orders.filter((o) => o.status === 'sent_to_chef').length}</b><span>New Tickets</span></div></div>
+                <div className="savor-stat"><span className="savor-ic red">🔥</span><div><b>{orders.filter((o) => o.status === 'preparing').length}</b><span>On the Fire</span></div></div>
+                <div className="savor-stat"><span className="savor-ic green">✅</span><div><b>{orders.filter((o) => o.status === 'ready').length}</b><span>Ready for Pickup</span></div></div>
+              </div>
+              <ChefBoard orders={orders} updateOrder={updateOrder} />
+            </div>
+          </div>
+        )}
+        {view === 'waiter' && (
+          <div className="savor">
+            <aside className="savor-side">
+              <div className="savor-logo"><span className="savor-hat">👨‍🍳</span><div><b>SAVOR</b><span>RESTAURANT</span></div></div>
+              <nav className="savor-nav">
+                <button className="active" onClick={() => document.getElementById('waiter-board')?.scrollIntoView({ behavior: 'smooth' })}>🛎️ Pickup Board</button>
+                <button onClick={() => document.getElementById('waiter-board')?.scrollIntoView({ behavior: 'smooth' })}>🔔 Ready ({orders.filter((o) => o.status === 'ready').length})</button>
+                <button onClick={() => document.getElementById('waiter-board')?.scrollIntoView({ behavior: 'smooth' })}>🍳 Coming Up ({orders.filter((o) => ['verified', 'sent_to_chef', 'preparing'].includes(o.status)).length})</button>
+                <button onClick={() => document.getElementById('waiter-board')?.scrollIntoView({ behavior: 'smooth' })}>✅ Served ({orders.filter((o) => o.status === 'served').length})</button>
+              </nav>
+              <div className="savor-mood">Good Food<br />Good Mood</div>
+            </aside>
+            <div className="savor-main">
+              <div className="savor-greet">
+                <div><h2>{mgrGreet}, Waiter 🛎️</h2><p className="muted">When the chef marks an order Ready, it flashes here — serve it fast.</p><p className="muted">📅 {mgrDate}</p></div>
+                <div className="savor-tagline">Eat · Enjoy · Repeat</div>
+              </div>
+              <div className="savor-stats">
+                <div className="savor-stat pink"><span className="savor-ic red">🔔</span><div><b>{orders.filter((o) => o.status === 'ready').length}</b><span>Ready to Serve</span></div></div>
+                <div className="savor-stat"><span className="savor-ic gold">🍳</span><div><b>{orders.filter((o) => ['verified', 'sent_to_chef', 'preparing'].includes(o.status)).length}</b><span>Coming Up</span></div></div>
+                <div className="savor-stat"><span className="savor-ic green">✅</span><div><b>{orders.filter((o) => o.status === 'served').length}</b><span>Served</span></div></div>
+              </div>
+              <WaiterBoard orders={orders} updateOrder={updateOrder} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -516,7 +565,7 @@ function ChefBoard({ orders, updateOrder }) {
     { key: 'ready', title: 'Ready for pickup', list: orders.filter((o) => o.status === 'ready') }
   ];
   return (
-    <div>
+    <div id="chef-board">
       <h2>Kitchen Board — verified orders only</h2>
       <p className="muted">Orders appear here only after the manager verifies and sends them to the chef.</p>
       <div className="lanes">{lanes.map((lane) => (
@@ -543,7 +592,7 @@ function WaiterBoard({ orders, updateOrder }) {
   const coming = orders.filter((o) => ['verified', 'sent_to_chef', 'preparing'].includes(o.status));
   const served = orders.filter((o) => o.status === 'served');
   return (
-    <div>
+    <div id="waiter-board">
       <h2>Waiter — pickup board</h2>
       {ready.map((o) => (
         <div key={o.id} className="alert">🔔 READY — Table {o.table}: {o.items.map((it) => `${it.name} × ${it.qty}`).join(', ')} — please serve now!
