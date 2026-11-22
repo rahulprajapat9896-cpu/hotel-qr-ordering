@@ -10,18 +10,29 @@ const STATUS_LABEL = { placed: 'Placed', verified: 'Verified', rejected: 'Reject
 const fmt = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 const waitMins = (iso) => Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
 
-function chime() {
+// --- Order rings (Web Audio, no sound file needed). Browsers block audio until
+// the user has tapped/clicked once, so the context is unlocked on first gesture. ---
+let sharedCtx = null;
+function getCtx() {
   try {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    const ctx = new Ctx();
-    [880, 1174].forEach((f, i) => {
-      const o = ctx.createOscillator(); const g = ctx.createGain();
-      o.frequency.value = f; o.connect(g); g.connect(ctx.destination);
-      g.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.18);
-      o.start(ctx.currentTime + i * 0.18); o.stop(ctx.currentTime + i * 0.18 + 0.25);
-    });
-  } catch { /* audio not available — visual alert still shows */ }
+    if (!sharedCtx) { const Ctx = window.AudioContext || window.webkitAudioContext; sharedCtx = new Ctx(); }
+    if (sharedCtx.state === 'suspended') sharedCtx.resume();
+    return sharedCtx;
+  } catch { return null; }
 }
+function tone(ctx, freq, start, dur, vol) {
+  const o = ctx.createOscillator(); const g = ctx.createGain();
+  o.type = 'sine'; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, ctx.currentTime + start);
+  g.gain.exponentialRampToValueAtTime(vol, ctx.currentTime + start + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + dur);
+  o.connect(g); g.connect(ctx.destination);
+  o.start(ctx.currentTime + start); o.stop(ctx.currentTime + start + dur + 0.05);
+}
+// Waiter: order Ready — 2-tone chime
+function chime() { const ctx = getCtx(); if (!ctx) return; [880, 1174].forEach((f, i) => tone(ctx, f, i * 0.18, 0.25, 0.15)); }
+// Manager + Chef: new order arrived — 3-tone ring
+function ringOrder() { const ctx = getCtx(); if (!ctx) return; [660, 880, 1100].forEach((f, i) => tone(ctx, f, i * 0.22, 0.22, 0.2)); }
 
 function HomeInner() {
   const params = useSearchParams();
@@ -42,7 +53,9 @@ function HomeInner() {
   const [histDate, setHistDate] = useState(() => new Date().toLocaleDateString('en-CA'));
   const [custTab, setCustTab] = useState('menu');
   const [newDish, setNewDish] = useState({ name: '', category: 'Starters', price: '', img: '' });
-  const prevReady = useRef(new Set());
+  const [soundOn, setSoundOn] = useState(true);
+  const prevIds = useRef({ all: new Set(), chef: new Set(), ready: new Set(), init: false });
+  const firstLoadDone = useRef(false);
 
   // --- Separate links: ?table=T1..T4 locks to Customer, ?view=manager/chef/waiter/customer locks to that page ---
   // A customer who scanned a table QR must never see the staff switcher.
@@ -73,6 +86,7 @@ function HomeInner() {
         const byOrder = {};
         (oi || []).forEach((it) => { (byOrder[it.order_id] = byOrder[it.order_id] || []).push({ id: it.menu_item_id, name: it.name, price: Number(it.price), qty: it.qty }); });
         setOrders(o.map((x) => ({ id: x.id, table: x.table_no, name: x.customer_name, paymentMethod: x.payment_method, paymentStatus: x.payment_status, status: x.status, total: Number(x.total), createdAt: x.created_at, items: byOrder[x.id] || [] })));
+        firstLoadDone.current = true;
       }
       const { data: r } = await supabase.from('ratings').select('*');
       if (r) setRatings(r.map((x) => ({ orderId: x.order_id, stars: x.stars, feedback: x.feedback })));
@@ -91,13 +105,30 @@ function HomeInner() {
     return () => { try { if (ch) supabase.removeChannel(ch); } catch {} };
   }, [fetchData]);
 
-  // Waiter alert: chime when a new order becomes Ready
+  // Unlock audio on first tap/click so order rings can play
   useEffect(() => {
+    const unlock = () => getCtx();
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    return () => { window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); };
+  }, []);
+
+  // Order rings: Manager rings on a new order, Chef rings when an order is
+  // sent to the kitchen, Waiter chimes when an order becomes Ready.
+  // First data load only sets the baseline — it never rings.
+  useEffect(() => {
+    if (!firstLoadDone.current) return;
+    const all = new Set(orders.map((o) => String(o.id)));
+    const chef = new Set(orders.filter((o) => o.status === 'sent_to_chef').map((o) => String(o.id)));
     const ready = new Set(orders.filter((o) => o.status === 'ready').map((o) => String(o.id)));
-    const fresh = [...ready].filter((id) => !prevReady.current.has(id));
-    if (fresh.length && prevReady.current.size) chime();
-    prevReady.current = ready;
-  }, [orders]);
+    if (!prevIds.current.init) { prevIds.current = { all, chef, ready, init: true }; return; }
+    if (soundOn) {
+      if (view === 'manager' && [...all].some((id) => !prevIds.current.all.has(id))) ringOrder();
+      if (view === 'chef' && [...chef].some((id) => !prevIds.current.chef.has(id))) ringOrder();
+      if (view === 'waiter' && [...ready].some((id) => !prevIds.current.ready.has(id))) chime();
+    }
+    prevIds.current = { all, chef, ready, init: true };
+  }, [orders, view, soundOn]);
 
   const highlights = useMemo(() => {
     const rated = [...menu].filter((d) => d.available !== false);
@@ -348,6 +379,7 @@ function HomeInner() {
                 <a className={mgrTab === 'reports' ? 'active' : ''} href="/?view=manager&tab=reports">📊 Reports</a>
                 <a className={mgrTab === 'settings' ? 'active' : ''} href="/?view=manager&tab=settings">⚙️ Settings</a>
               </nav>
+              <button className="savor-sound" onClick={() => setSoundOn((s) => !s)}>{soundOn ? '🔔 Sound On' : '🔕 Sound Off'}</button>
               <div className="savor-mood">Good Food<br />Good Mood</div>
             </aside>
             <div className="savor-main" id="savor-top">
@@ -497,6 +529,7 @@ function HomeInner() {
                 <a className={chefTab === 'fire' ? 'active' : ''} href="/?view=chef&tab=fire">🔥 On the Fire ({orders.filter((o) => o.status === 'preparing').length})</a>
                 <a className={chefTab === 'ready' ? 'active' : ''} href="/?view=chef&tab=ready">✅ Ready for Pickup ({orders.filter((o) => o.status === 'ready').length})</a>
               </nav>
+              <button className="savor-sound" onClick={() => setSoundOn((s) => !s)}>{soundOn ? '🔔 Sound On' : '🔕 Sound Off'}</button>
               <div className="savor-mood">Good Food<br />Good Mood</div>
             </aside>
             <div className="savor-main">
@@ -523,6 +556,7 @@ function HomeInner() {
                 <a className={waiterTab === 'coming' ? 'active' : ''} href="/?view=waiter&tab=coming">🍳 Coming Up ({orders.filter((o) => ['verified', 'sent_to_chef', 'preparing'].includes(o.status)).length})</a>
                 <a className={waiterTab === 'served' ? 'active' : ''} href="/?view=waiter&tab=served">✅ Served ({orders.filter((o) => o.status === 'served').length})</a>
               </nav>
+              <button className="savor-sound" onClick={() => setSoundOn((s) => !s)}>{soundOn ? '🔔 Sound On' : '🔕 Sound Off'}</button>
               <div className="savor-mood">Good Food<br />Good Mood</div>
             </aside>
             <div className="savor-main">

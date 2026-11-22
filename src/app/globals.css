@@ -88,6 +88,7 @@ label { font-size: 13px; font-weight: 800; }
 .savor-hero-text h2 span { color: #c98a1b; }
 .savor-hero-text p { margin: 0 0 14px; }
 @media (max-width: 900px) { .savor-custgrid { grid-template-columns: 1fr; } .savor-cart { position: static; } }
+.savor-sound { margin: 14px 12px 0; padding: 10px 12px; border-radius: 12px; border: 1px solid #2e6b41; background: #1e4d2e; color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; text-align: left; }
 .savor-nav button, .savor-nav a { display: block; text-align: left; background: transparent; border: 0; color: #d8e8d8; padding: 11px 12px; border-radius: 12px; font-weight: 700; font-size: 15px; text-decoration: none; }
 .savor-nav button.active, .savor-nav button:hover, .savor-nav a.active, .savor-nav a:hover { background: #1e4d2e; color: #fff; }
 .savor-badge { background: #e4572e; color: #fff; border-radius: 999px; padding: 1px 8px; font-size: 12px; margin-left: 6px; }
