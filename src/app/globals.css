@@ -61,4 +61,10 @@ input, select, textarea { font-family: inherit; }
 .stat b { font-size: 24px; display: block; }
 input[type=text], input[type=number], select, textarea { width: 100%; padding: 9px 10px; border: 1px solid #d8c9b8; border-radius: 9px; margin: 4px 0 10px; }
 label { font-size: 13px; font-weight: 700; }
+/* Floating cart button — appears as soon as the customer adds a dish */
+.cart-fab { position: fixed; right: 16px; bottom: 16px; z-index: 30; background: #e4572e; color: #fff; border: 0; border-radius: 999px; padding: 14px 20px; font-weight: 800; font-size: 16px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+.cart-fab:active { transform: scale(.97); }
+/* Receipt shown when the order is served / completed */
+.receipt { border: 2px dashed #d8c9b8; border-radius: 12px; padding: 16px; background: #fffdf7; margin-top: 12px; }
+.receipt h3 { margin: 0 0 4px; }
 @media print { .topbar, .noprint { display: none !important; } body { background: #fff; } }

@@ -217,7 +217,7 @@ function HomeInner() {
               </div>
             </div>
 
-            <div className="card">
+            <div className="card" id="bill">
               <h2>Your Bill {table ? `· Table ${table}` : ''}</h2>
               {cartItems.length === 0 ? <p className="muted">Cart is empty.</p> : cartItems.map((x) => (
                 <div key={x.dish.id} className="row" style={{ justifyContent: 'space-between' }}><span>{x.dish.name} × {x.qty}</span><span>{fmt(x.dish.price * x.qty)}</span></div>
@@ -242,8 +242,14 @@ function HomeInner() {
                 <p><b>Order {String(myOrder.id).slice(0, 8)}</b> · Table {myOrder.table} · {fmt(myOrder.total)} · {myOrder.paymentMethod} ({myOrder.paymentStatus})</p>
                 <div className="steps">{STEPS.map((s, i) => { const idx = STEPS.indexOf(myOrder.status); return <span key={s} className={i < idx ? 'done' : i === idx ? 'now' : ''}>{STEP_LABELS[s]}</span>; })}</div>
                 <p className="muted">Current status: <b>{STATUS_LABEL[myOrder.status] || myOrder.status}</b></p>
+                {myOrder.status === 'served' && <ReceiptBox order={myOrder} />}
                 {myOrder.status === 'served' && <RatingBox orderId={myOrder.id} onSubmit={submitRating} done={ratings.some((r) => String(r.orderId) === String(myOrder.id))} />}
               </div>
+            )}
+            {cartItems.length > 0 && (
+              <button className="cart-fab" onClick={() => document.getElementById('bill')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+                🛒 Cart · {cartItems.reduce((s, x) => s + x.qty, 0)} items · {fmt(total)}
+              </button>
             )}
           </div>
         )}
@@ -286,6 +292,28 @@ function HomeInner() {
         {view === 'chef' && <ChefBoard orders={orders} updateOrder={updateOrder} />}
         {view === 'waiter' && <WaiterBoard orders={orders} updateOrder={updateOrder} />}
       </div>
+    </div>
+  );
+}
+
+function ReceiptBox({ order }) {
+  const sub = (order.items || []).reduce((s, it) => s + Number(it.price || 0) * Number(it.qty || 0), 0);
+  const gst = Math.round(sub * GST_RATE);
+  const tot = sub + gst;
+  return (
+    <div className="receipt">
+      <h3>🧾 Receipt — Order {String(order.id).slice(0, 8)}</h3>
+      <p className="muted">Table {order.table} · {order.name} · {new Date(order.createdAt).toLocaleString('en-IN')}</p>
+      {(order.items || []).map((it, i) => (
+        <div key={i} className="row" style={{ justifyContent: 'space-between' }}><span>{it.name} × {it.qty}</span><span>{fmt(Number(it.price) * Number(it.qty))}</span></div>
+      ))}
+      <hr />
+      <div className="row" style={{ justifyContent: 'space-between' }}><span>Subtotal</span><span>{fmt(sub)}</span></div>
+      <div className="row" style={{ justifyContent: 'space-between' }}><span>GST (5%)</span><span>{fmt(gst)}</span></div>
+      <div className="row" style={{ justifyContent: 'space-between' }}><b>Total</b><b>{fmt(tot)}</b></div>
+      <p className="muted">Payment: {order.paymentMethod} ({order.paymentStatus}) · Status: Served / Completed</p>
+      <p><b>Thank you! Visit again.</b></p>
+      <button className="btn small ghost" onClick={() => window.print()}>Print Receipt</button>
     </div>
   );
 }
