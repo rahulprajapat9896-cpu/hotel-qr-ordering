@@ -38,7 +38,7 @@ function HomeInner() {
   const [paused, setPaused] = useState(false);
   const [cat, setCat] = useState('All');
   const [notice, setNotice] = useState('');
-  const [newDish, setNewDish] = useState({ name: '', category: 'Starters', price: '' });
+  const [newDish, setNewDish] = useState({ name: '', category: 'Starters', price: '', img: '' });
   const prevReady = useRef(new Set());
 
   // --- Separate links: ?table=T1..T4 locks to Customer, ?view=manager/chef/waiter/customer locks to that page ---
@@ -332,12 +332,30 @@ function RatingBox({ orderId, onSubmit, done }) {
 }
 
 function ManagerMenu({ menu, setMenu, newDish, setNewDish, fetchData }) {
+  function handlePhoto(e) {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 800;
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        setNewDish((d) => ({ ...d, img: c.toDataURL('image/jpeg', 0.8) }));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(f);
+  }
   async function addDish() {
     if (!newDish.name || !newDish.price) return;
-    const dish = { name: newDish.name, category: newDish.category, price: Number(newDish.price), veg: true, img: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80', desc: 'Added by manager.', available: true };
+    const dish = { name: newDish.name, category: newDish.category, price: Number(newDish.price), veg: true, img: newDish.img || 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80', desc: 'Added by manager.', available: true };
     if (supabase) { const { data } = await supabase.from('menu_items').insert({ name: dish.name, category: dish.category, price: dish.price, veg: true, image_url: dish.img, description: dish.desc, available: true }).select().single(); if (data) setMenu((m) => [...m, { ...dish, id: data.id }]); }
     else setMenu((m) => [...m, { ...dish, id: `m-${Date.now()}` }]);
-    setNewDish({ name: '', category: 'Starters', price: '' }); fetchData();
+    setNewDish({ name: '', category: 'Starters', price: '', img: '' }); fetchData();
   }
   async function removeDish(id) {
     setMenu((m) => m.filter((d) => String(d.id) !== String(id)));
@@ -361,6 +379,11 @@ function ManagerMenu({ menu, setMenu, newDish, setNewDish, fetchData }) {
         <select style={{ flex: 1 }} value={newDish.category} onChange={(e) => setNewDish({ ...newDish, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select>
         <input type="number" style={{ flex: 1 }} placeholder="Price ₹" value={newDish.price} onChange={(e) => setNewDish({ ...newDish, price: e.target.value })} />
         <button className="btn primary" onClick={addDish}>Add Dish</button>
+      </div>
+      <div className="row" style={{ marginTop: 8 }}>
+        <label style={{ fontWeight: 600 }}>Dish photo (optional)</label>
+        <input type="file" accept="image/*" onChange={handlePhoto} />
+        {newDish.img && <img src={newDish.img} alt="Dish preview" style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 8 }} />}
       </div>
       {menu.map((d) => (
         <div key={d.id} className="row" style={{ justifyContent: 'space-between', borderTop: '1px solid #f0e6d8', padding: '6px 0' }}>
