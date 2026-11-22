@@ -52,6 +52,7 @@ function HomeInner() {
   const [mgrSearch, setMgrSearch] = useState('');
   const [histDate, setHistDate] = useState(() => new Date().toLocaleDateString('en-CA'));
   const [custTab, setCustTab] = useState('menu');
+  const [sideOpen, setSideOpen] = useState(false);
   const [newDish, setNewDish] = useState({ name: '', category: 'Starters', price: '', img: '' });
   const [soundOn, setSoundOn] = useState(true);
   const prevIds = useRef({ all: new Set(), chef: new Set(), ready: new Set(), init: false });
@@ -264,16 +265,18 @@ function HomeInner() {
 
         {view === 'customer' && (
           <div className="savor">
-            <aside className="savor-side">
+            <aside className={"savor-side" + (sideOpen ? " open" : "")}>
               <div className="savor-logo"><span className="savor-hat">👨‍🍳</span><div><b>SAVOR</b><span>RESTAURANT</span></div></div>
               <nav className="savor-nav">
-                <a className={custTab === 'menu' ? 'active' : ''} href="#" onClick={(e) => { e.preventDefault(); setCustTab('menu'); }}>🍴 Menu</a>
-                <a className={custTab === 'orders' ? 'active' : ''} href="#" onClick={(e) => { e.preventDefault(); setCustTab('orders'); }}>🕐 My Orders</a>
-                <a className={custTab === 'info' ? 'active' : ''} href="#" onClick={(e) => { e.preventDefault(); setCustTab('info'); }}>🪑 Table Info</a>
+                <a className={custTab === 'menu' ? 'active' : ''} href="#" onClick={(e) => { e.preventDefault(); setCustTab('menu'); setSideOpen(false); }}>🍴 Menu</a>
+                <a className={custTab === 'orders' ? 'active' : ''} href="#" onClick={(e) => { e.preventDefault(); setCustTab('orders'); setSideOpen(false); }}>🕐 My Orders</a>
+                <a className={custTab === 'info' ? 'active' : ''} href="#" onClick={(e) => { e.preventDefault(); setCustTab('info'); setSideOpen(false); }}>🪑 Table Info</a>
               </nav>
               <div className="savor-mood">Good Food<br />Good Mood ❤️</div>
             </aside>
+            {sideOpen && <div className="savor-overlay" onClick={() => setSideOpen(false)} />}
             <div className="savor-main">
+              <button className="savor-burger" onClick={() => setSideOpen((o) => !o)}>☰ Menu</button>
             {table && (
               <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
                 <span className="chip green">🍽️ Table {table} &nbsp;● Online</span>
@@ -367,7 +370,7 @@ function HomeInner() {
 
         {view === 'manager' && (
           <div className="savor">
-            <aside className="savor-side">
+            <aside className={"savor-side" + (sideOpen ? " open" : "")}>
               <div className="savor-logo"><span className="savor-hat">👨‍🍳</span><div><b>SAVOR</b><span>RESTAURANT</span></div></div>
               <nav className="savor-nav">
                 <a className={mgrTab === 'dashboard' ? 'active' : ''} href="/?view=manager&tab=dashboard">▦ Dashboard</a>
@@ -382,7 +385,9 @@ function HomeInner() {
               <button className="savor-sound" onClick={() => setSoundOn((s) => !s)}>{soundOn ? '🔔 Sound On' : '🔕 Sound Off'}</button>
               <div className="savor-mood">Good Food<br />Good Mood</div>
             </aside>
+            {sideOpen && <div className="savor-overlay" onClick={() => setSideOpen(false)} />}
             <div className="savor-main" id="savor-top">
+              <button className="savor-burger" onClick={() => setSideOpen((o) => !o)}>☰ Menu</button>
               {['dashboard', 'orders'].includes(mgrTab) && (
               <div className="savor-topbar">
                 <input type="text" placeholder="Search orders, tables..." value={mgrSearch} onChange={(e) => setMgrSearch(e.target.value)} />
@@ -521,7 +526,7 @@ function HomeInner() {
 
         {view === 'chef' && (
           <div className="savor">
-            <aside className="savor-side">
+            <aside className={"savor-side" + (sideOpen ? " open" : "")}>
               <div className="savor-logo"><span className="savor-hat">👨‍🍳</span><div><b>SAVOR</b><span>RESTAURANT</span></div></div>
               <nav className="savor-nav">
                 <a className={chefTab === 'board' ? 'active' : ''} href="/?view=chef&tab=board">🍳 Kitchen Board</a>
@@ -532,7 +537,9 @@ function HomeInner() {
               <button className="savor-sound" onClick={() => setSoundOn((s) => !s)}>{soundOn ? '🔔 Sound On' : '🔕 Sound Off'}</button>
               <div className="savor-mood">Good Food<br />Good Mood</div>
             </aside>
+            {sideOpen && <div className="savor-overlay" onClick={() => setSideOpen(false)} />}
             <div className="savor-main">
+              <button className="savor-burger" onClick={() => setSideOpen((o) => !o)}>☰ Menu</button>
               <div className="savor-greet">
                 <div><h2>{mgrGreet}, Chef 👨‍🍳</h2><p className="muted">Verified orders only — cook them in order, mark Ready when done.</p><p className="muted">📅 {mgrDate}</p></div>
                 <div className="savor-tagline">Eat · Enjoy · Repeat</div>
@@ -548,7 +555,7 @@ function HomeInner() {
         )}
         {view === 'waiter' && (
           <div className="savor">
-            <aside className="savor-side">
+            <aside className={"savor-side" + (sideOpen ? " open" : "")}>
               <div className="savor-logo"><span className="savor-hat">👨‍🍳</span><div><b>SAVOR</b><span>RESTAURANT</span></div></div>
               <nav className="savor-nav">
                 <a className={waiterTab === 'board' ? 'active' : ''} href="/?view=waiter&tab=board">🛎️ Pickup Board</a>
@@ -559,7 +566,9 @@ function HomeInner() {
               <button className="savor-sound" onClick={() => setSoundOn((s) => !s)}>{soundOn ? '🔔 Sound On' : '🔕 Sound Off'}</button>
               <div className="savor-mood">Good Food<br />Good Mood</div>
             </aside>
+            {sideOpen && <div className="savor-overlay" onClick={() => setSideOpen(false)} />}
             <div className="savor-main">
+              <button className="savor-burger" onClick={() => setSideOpen((o) => !o)}>☰ Menu</button>
               <div className="savor-greet">
                 <div><h2>{mgrGreet}, Waiter 🛎️</h2><p className="muted">When the chef marks an order Ready, it flashes here — serve it fast.</p><p className="muted">📅 {mgrDate}</p></div>
                 <div className="savor-tagline">Eat · Enjoy · Repeat</div>
