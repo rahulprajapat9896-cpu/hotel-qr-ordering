@@ -39,6 +39,7 @@ function HomeInner() {
   const [cat, setCat] = useState('All');
   const [notice, setNotice] = useState('');
   const [mgrSearch, setMgrSearch] = useState('');
+  const [histDate, setHistDate] = useState(() => new Date().toLocaleDateString('en-CA'));
   const [newDish, setNewDish] = useState({ name: '', category: 'Starters', price: '', img: '' });
   const prevReady = useRef(new Set());
 
@@ -181,6 +182,11 @@ function HomeInner() {
     return days;
   }, [orders]);
   const maxDayRev = Math.max(1, ...last7.map((d) => d.rev));
+  // --- Date-wise history: orders + earnings for the date the manager picks ---
+  const histOrders = orders.filter((o) => new Date(o.createdAt).toLocaleDateString('en-CA') === histDate);
+  const histRevenue = histOrders.filter((o) => o.status !== 'rejected').reduce((s, o) => s + Number(o.total || 0), 0);
+  const histPaid = histOrders.filter((o) => o.paymentStatus === 'paid').reduce((s, o) => s + Number(o.total || 0), 0);
+  const histDateLabel = new Date(`${histDate}T12:00:00`).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const visibleMenu = menu.filter((d) => (cat === 'All' || d.category === cat) && d.available !== false);
   const slideDish = highlights[slide % Math.max(1, highlights.length)];
   const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://hotel-qr-ordering-alpha.vercel.app';
@@ -293,6 +299,7 @@ function HomeInner() {
                 <button onClick={() => document.getElementById('savor-menu')?.scrollIntoView({ behavior: 'smooth' })}>🍴 Menu</button>
                 <button onClick={() => document.getElementById('savor-qr')?.scrollIntoView({ behavior: 'smooth' })}>⊞ Tables &amp; QR</button>
                 <button onClick={() => setNotice('Customers list orders se banta hai — har order me customer ka naam aur table dikhta hai.')}>👥 Customers</button>
+                <button onClick={() => document.getElementById('savor-history')?.scrollIntoView({ behavior: 'smooth' })}>📅 History</button>
                 <button onClick={() => document.getElementById('savor-revenue')?.scrollIntoView({ behavior: 'smooth' })}>📊 Reports</button>
                 <button onClick={() => setNotice('Settings — abhi menu aur QR yahin se manage hote hain.')}>⚙️ Settings</button>
               </nav>
@@ -362,6 +369,32 @@ function HomeInner() {
                   <h3>Smooth Service,<br />Happier Customers</h3>
                   <button className="btn gold" onClick={() => document.getElementById('savor-menu')?.scrollIntoView({ behavior: 'smooth' })}>Manage Menu →</button>
                 </div>
+              </div>
+              <div className="card savor-card" id="savor-history">
+                <div className="row" style={{ justifyContent: 'space-between' }}><h2>📅 History</h2><input type="date" value={histDate} onChange={(e) => setHistDate(e.target.value)} style={{ width: 'auto', margin: 0 }} /></div>
+                <p className="muted">{histDateLabel}</p>
+                <div className="savor-stats">
+                  <div className="savor-stat"><span className="savor-ic green">🛍️</span><div><b>{histOrders.length}</b><span>Orders</span></div></div>
+                  <div className="savor-stat"><span className="savor-ic gold">₹</span><div><b>{fmt(histRevenue)}</b><span>Total kamai</span></div></div>
+                  <div className="savor-stat"><span className="savor-ic green">✅</span><div><b>{fmt(histPaid)}</b><span>Paid (received)</span></div></div>
+                  <div className="savor-stat pink"><span className="savor-ic red">⏳</span><div><b>{fmt(histRevenue - histPaid)}</b><span>Pending payment</span></div></div>
+                </div>
+                {histOrders.length === 0 ? <p className="muted">Is date ko koi order nahi hai.</p> : (
+                  <div className="savor-tablewrap"><table className="savor-table">
+                    <thead><tr><th>Order ID</th><th>Table</th><th>Items</th><th>Total</th><th>Status</th><th>Time</th><th>Payment</th></tr></thead>
+                    <tbody>{histOrders.map((o) => (
+                      <tr key={o.id}>
+                        <td><b>#{String(o.id).slice(0, 4)}</b></td>
+                        <td>{o.table}</td>
+                        <td>{o.items.map((it) => `${it.name} × ${it.qty}`).join(', ') || '—'}</td>
+                        <td><b>{fmt(o.total)}</b></td>
+                        <td><span className={`savor-pill ${o.status}`}>{STATUS_LABEL[o.status] || o.status}</span></td>
+                        <td>{new Date(o.createdAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</td>
+                        <td>{o.paymentMethod} · {o.paymentStatus}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table></div>
+                )}
               </div>
               <div className="card savor-card" id="savor-qr"><h2>Table QR Codes</h2><p className="muted">Print these from the <a href="/qr">printable QR page</a>. Each QR opens the customer page for that table.</p>
                 <div className="qrgrid">{TABLES.map((t) => <div key={t}><img src={`/qr/table-${t.toLowerCase()}-qr.png`} alt={`QR for table ${t}`} /><p style={{ textAlign: 'center' }}><b>{t}</b><br /><span className="muted">{siteUrl}/?table={t}</span></p></div>)}</div>
