@@ -257,6 +257,13 @@ function HomeInner() {
       {!hideTopHeader && (
       <header className="topbar">
         <h1>👨‍🍳 SAVOR <span>Restaurant</span></h1>
+        {view === 'customer' && (
+          <nav className="cust-tabs">
+            <button className={custTab === 'menu' ? 'active' : ''} onClick={() => setCustTab('menu')}>🍴 Menu</button>
+            <button className={custTab === 'orders' ? 'active' : ''} onClick={() => setCustTab('orders')}>🕐 My Orders</button>
+            <button className={custTab === 'info' ? 'active' : ''} onClick={() => setCustTab('info')}>🪑 Table Info</button>
+          </nav>
+        )}
       </header>
       )}
       {!isSupabaseConfigured && <div className="wrap"><div className="card" style={{ background: '#fff3cd' }}>Demo mode: Supabase is not configured yet — orders are kept in this browser only. Set <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> in Vercel to go live (see README).</div></div>}
@@ -265,18 +272,9 @@ function HomeInner() {
 
         {view === 'customer' && (
           <div className="savor">
-            <aside className={"savor-side" + (sideOpen ? " open" : "")}>
-              <div className="savor-logo"><span className="savor-hat">👨‍🍳</span><div><b>SAVOR</b><span>RESTAURANT</span></div></div>
-              <nav className="savor-nav">
-                <a className={custTab === 'menu' ? 'active' : ''} href="#" onClick={(e) => { e.preventDefault(); setCustTab('menu'); setSideOpen(false); }}>🍴 Menu</a>
-                <a className={custTab === 'orders' ? 'active' : ''} href="#" onClick={(e) => { e.preventDefault(); setCustTab('orders'); setSideOpen(false); }}>🕐 My Orders</a>
-                <a className={custTab === 'info' ? 'active' : ''} href="#" onClick={(e) => { e.preventDefault(); setCustTab('info'); setSideOpen(false); }}>🪑 Table Info</a>
-              </nav>
-              <div className="savor-mood">Good Food<br />Good Mood ❤️</div>
-            </aside>
-            {sideOpen && <div className="savor-overlay" onClick={() => setSideOpen(false)} />}
+
             <div className="savor-main">
-              <button className="savor-burger" onClick={() => setSideOpen((o) => !o)}>☰ Menu</button>
+
             {table && (
               <div className="row" style={{ marginBottom: 12 }}>
                 <span className="chip green">🍽️ Table {table} &nbsp;● Online</span>
