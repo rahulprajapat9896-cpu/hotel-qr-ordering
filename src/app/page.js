@@ -220,7 +220,7 @@ function HomeInner() {
             <div className="card" id="bill">
               <h2>Your Bill {table ? `· Table ${table}` : ''}</h2>
               {cartItems.length === 0 ? <p className="muted">Cart is empty.</p> : cartItems.map((x) => (
-                <div key={x.dish.id} className="row" style={{ justifyContent: 'space-between' }}><span>{x.dish.name} × {x.qty}</span><span>{fmt(x.dish.price * x.qty)}</span></div>
+                <div key={x.dish.id} className="row" style={{ justifyContent: 'space-between' }}><span>{x.dish.name} × {x.qty}</span><span className="row"><button className="btn small ghost" onClick={() => setQty(x.dish.id, x.qty - 1)}>−</button><button className="btn small ghost" onClick={() => setQty(x.dish.id, x.qty + 1)}>+</button><span>{fmt(x.dish.price * x.qty)}</span><button className="btn small ghost" onClick={() => setQty(x.dish.id, 0)}>Remove</button></span></div>
               ))}
               <hr />
               <div className="row" style={{ justifyContent: 'space-between' }}><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
