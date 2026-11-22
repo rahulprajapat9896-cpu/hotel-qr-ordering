@@ -278,9 +278,8 @@ function HomeInner() {
             <div className="savor-main">
               <button className="savor-burger" onClick={() => setSideOpen((o) => !o)}>☰ Menu</button>
             {table && (
-              <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+              <div className="row" style={{ marginBottom: 12 }}>
                 <span className="chip green">🍽️ Table {table} &nbsp;● Online</span>
-                <button className="btn small ghost" onClick={() => window.location.reload()}>🔳 Scan Again</button>
               </div>
             )}
             {custTab === 'menu' && (<>
