@@ -73,4 +73,61 @@ label { font-size: 13px; font-weight: 800; }
 /* Receipt shown when the order is served / completed */
 .receipt { border: 2px dashed #d8c9b8; border-radius: 14px; padding: 18px; background: #fffdf7; margin-top: 12px; }
 .receipt h3 { margin: 0 0 4px; }
+/* SAVOR manager dashboard — dark green sidebar + cream main, same design language for all pages */
+.topbar { background: linear-gradient(90deg, #0d2b1a, #143d24 70%, #1d5233); }
+.savor { display: flex; min-height: 80vh; margin: -20px -16px -80px; }
+.savor-side { width: 230px; flex-shrink: 0; background: linear-gradient(180deg, #0d2b1a, #0a2113); color: #fff; padding: 22px 14px; display: flex; flex-direction: column; gap: 18px; position: sticky; top: 0; align-self: flex-start; min-height: 100vh; }
+.savor-logo { display: flex; gap: 10px; align-items: center; padding: 4px 8px 14px; border-bottom: 1px solid rgba(255,183,3,.4); }
+.savor-logo b { display: block; font-family: 'Fraunces', Georgia, serif; font-size: 26px; letter-spacing: 2px; }
+.savor-logo span { font-size: 10px; letter-spacing: 4px; color: #ffb703; font-weight: 700; }
+.savor-hat { font-size: 34px; }
+.savor-nav { display: flex; flex-direction: column; gap: 4px; }
+.savor-nav button { text-align: left; background: transparent; border: 0; color: #d8e8d8; padding: 11px 12px; border-radius: 12px; font-weight: 700; font-size: 15px; }
+.savor-nav button.active, .savor-nav button:hover { background: #1e4d2e; color: #fff; }
+.savor-badge { background: #e4572e; color: #fff; border-radius: 999px; padding: 1px 8px; font-size: 12px; margin-left: 6px; }
+.savor-mood { font-family: 'Fraunces', Georgia, serif; font-size: 24px; color: #ffb703; padding: 10px; line-height: 1.2; }
+.savor-logout { margin-top: auto; background: transparent; border: 1px solid rgba(255,255,255,.3); color: #fff; border-radius: 999px; padding: 10px; font-weight: 700; }
+.savor-main { flex: 1; min-width: 0; background: #fdf6e9; padding: 18px 22px 40px; }
+.savor-topbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
+.savor-topbar input[type=text] { margin: 0; border-radius: 999px; background: #fff; }
+.savor-bell { position: relative; font-size: 20px; }
+.savor-bell i { position: absolute; top: 0; right: 0; width: 9px; height: 9px; border-radius: 50%; background: #e4572e; }
+.savor-avatar { width: 38px; height: 38px; border-radius: 50%; background: #143d24; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; }
+.savor-greet { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 16px; }
+.savor-greet h2 { margin: 0; font-size: 30px; }
+.savor-tagline { font-family: 'Fraunces', Georgia, serif; font-style: italic; font-size: 24px; color: #6b7a3a; }
+.savor-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 16px; }
+.savor-stat { background: #fff; border-radius: 18px; padding: 18px; display: flex; gap: 12px; align-items: center; box-shadow: 0 6px 18px rgba(60,35,10,.07); }
+.savor-stat.pink { background: #fdeceb; }
+.savor-stat b { display: block; font-size: 26px; }
+.savor-stat span:last-child { color: #7a6a58; font-size: 13px; }
+.savor-ic { width: 48px; height: 48px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+.savor-ic.green { background: #dcf0d8; } .savor-ic.gold { background: #ffecb3; } .savor-ic.red { background: #ffcdd2; }
+.savor-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 16px; }
+.savor-card { margin-bottom: 0; }
+.savor-tablewrap { overflow-x: auto; }
+.savor-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.savor-table th { text-align: left; color: #7a6a58; font-size: 12px; padding: 8px; border-bottom: 2px solid #f0e2cd; }
+.savor-table td { padding: 10px 8px; border-bottom: 1px solid #f6ead7; vertical-align: top; }
+.savor-pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; background: #f6ead7; }
+.savor-pill.preparing { background: #ffecb3; color: #7a5c00; }
+.savor-pill.ready { background: #c8e6c9; color: #2e7d32; }
+.savor-pill.served { background: #c8e6c9; color: #2e7d32; }
+.savor-pill.placed, .savor-pill.verified, .savor-pill.sent_to_chef { background: #ffe0b2; color: #7a4a00; }
+.savor-pill.rejected { background: #ffcdd2; color: #8e0000; }
+.savor-pop { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid #f6ead7; }
+.savor-pop img { width: 56px; height: 56px; object-fit: cover; border-radius: 12px; }
+.savor-pop div { flex: 1; }
+.savor-pop b { display: block; } .savor-pop span.muted { display: block; }
+.savor-bar { display: block; height: 5px; background: #f0e2cd; border-radius: 99px; margin-top: 6px; overflow: hidden; }
+.savor-bar i { display: block; height: 100%; background: linear-gradient(90deg, #f08a24, #ffb703); }
+.savor-bars { display: flex; gap: 10px; align-items: flex-end; height: 160px; padding-top: 20px; }
+.savor-barcol { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; height: 100%; }
+.savor-barcol span { font-size: 11px; font-weight: 700; }
+.savor-barcol i { display: block; width: 100%; max-width: 44px; background: linear-gradient(180deg, #2e7d32, #81c784); border-radius: 8px 8px 0 0; }
+.savor-barcol b { font-size: 12px; color: #7a6a58; }
+.savor-promo { background: linear-gradient(135deg, #0d2b1a, #1d5233); color: #fff; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 12px; justify-content: center; }
+.savor-promo h3 { margin: 0; font-size: 24px; }
+.savor-promo-ic { font-size: 36px; }
+@media (max-width: 760px) { .savor { flex-direction: column; } .savor-side { width: 100%; min-height: 0; position: static; } .savor-nav { flex-direction: row; flex-wrap: wrap; } .savor-grid { grid-template-columns: 1fr; } }
 @media print { .topbar, .noprint { display: none !important; } body { background: #fff; } }

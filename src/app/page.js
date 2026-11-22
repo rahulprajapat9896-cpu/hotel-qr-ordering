@@ -38,6 +38,7 @@ function HomeInner() {
   const [paused, setPaused] = useState(false);
   const [cat, setCat] = useState('All');
   const [notice, setNotice] = useState('');
+  const [mgrSearch, setMgrSearch] = useState('');
   const [newDish, setNewDish] = useState({ name: '', category: 'Starters', price: '', img: '' });
   const prevReady = useRef(new Set());
 
@@ -152,6 +153,34 @@ function HomeInner() {
   const myOrder = orders.find((o) => String(o.id) === String(myOrderId));
   const avgRating = ratings.length ? (ratings.reduce((s, r) => s + r.stars, 0) / ratings.length).toFixed(1) : '—';
   const revenue = orders.filter((o) => o.status !== 'rejected').reduce((s, o) => s + Number(o.total || 0), 0);
+  // --- SAVOR manager dashboard (real data only, nothing invented) ---
+  const mgrHour = new Date().getHours();
+  const mgrGreet = mgrHour < 12 ? 'Good morning' : mgrHour < 17 ? 'Good afternoon' : 'Good evening';
+  const mgrDate = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  const pendingCount = orders.filter((o) => o.status === 'placed').length;
+  const activeTables = new Set(orders.filter((o) => !['served', 'rejected'].includes(o.status)).map((o) => o.table)).size;
+  const mgrOrders = orders.filter((o) => {
+    if (!mgrSearch.trim()) return true;
+    const hay = `${o.id} ${o.table} ${o.name} ${o.items.map((it) => it.name).join(' ')}`.toLowerCase();
+    return hay.includes(mgrSearch.trim().toLowerCase());
+  });
+  const popular = useMemo(() => {
+    const counts = {};
+    orders.forEach((o) => (o.items || []).forEach((it) => { counts[it.name] = (counts[it.name] || 0) + Number(it.qty || 0); }));
+    return Object.entries(counts).map(([name, qty]) => ({ name, qty, img: (menu.find((d) => d.name === name) || {}).img || '' })).sort((a, b) => b.qty - a.qty).slice(0, 4);
+  }, [orders, menu]);
+  const popMax = Math.max(1, ...popular.map((p) => p.qty));
+  const last7 = useMemo(() => {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0, 0, 0, 0);
+      const next = new Date(d); next.setDate(next.getDate() + 1);
+      const rev = orders.filter((o) => o.status !== 'rejected' && new Date(o.createdAt) >= d && new Date(o.createdAt) < next).reduce((s, o) => s + Number(o.total || 0), 0);
+      days.push({ label: d.toLocaleDateString('en-IN', { weekday: 'short' }), rev });
+    }
+    return days;
+  }, [orders]);
+  const maxDayRev = Math.max(1, ...last7.map((d) => d.rev));
   const visibleMenu = menu.filter((d) => (cat === 'All' || d.category === cat) && d.available !== false);
   const slideDish = highlights[slide % Math.max(1, highlights.length)];
   const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://hotel-qr-ordering-alpha.vercel.app';
@@ -159,7 +188,7 @@ function HomeInner() {
   return (
     <div>
       <header className="topbar">
-        <h1>🍽️ Hotel <span>QR Ordering</span></h1>
+        <h1>👨‍🍳 SAVOR <span>Restaurant</span></h1>
         {!isLocked && (
           <nav className="switcher">
             {['customer', 'manager', 'chef', 'waiter'].map((v) => (
@@ -255,37 +284,90 @@ function HomeInner() {
         )}
 
         {view === 'manager' && (
-          <div>
-            <div className="row" style={{ marginBottom: 12 }}>
-              <div className="stat"><span className="muted">Revenue (today)</span><b>{fmt(revenue)}</b></div>
-              <div className="stat"><span className="muted">Orders</span><b>{orders.length}</b></div>
-              <div className="stat"><span className="muted">Average rating</span><b>{avgRating} / 5</b></div>
-              <div className="stat"><span className="muted">Needs action</span><b>{orders.filter((o) => o.status === 'placed').length}</b></div>
-            </div>
-            {TABLES.map((t) => {
-              const list = orders.filter((o) => o.table === t);
-              return (
-                <div key={t} className="card"><h2>Table {t} {list.length ? `· ${list.length} order(s)` : '· No orders yet'}</h2>
-                  {list.map((o) => (
-                    <div key={o.id} className="ticket">
-                      <div className="row"><b>{o.name}</b><span className="chip amber">{STATUS_LABEL[o.status] || o.status}</span><span className="chip">{o.paymentMethod} · {o.paymentStatus}</span><span className="price">{fmt(o.total)}</span></div>
-                      <p className="muted">{o.items.map((it) => `${it.name} × ${it.qty}`).join(', ') || '—'}</p>
-                      <p className="muted">{new Date(o.createdAt).toLocaleString('en-IN')} · {waitMins(o.createdAt)} min ago</p>
-                      <div className="row">
-                        {o.status === 'placed' && <><button className="btn green small" onClick={() => updateOrder(o.id, { status: 'verified' })}>Verify</button><button className="btn small ghost" onClick={() => updateOrder(o.id, { status: 'rejected' })}>Reject</button></>}
-                        {o.status === 'verified' && <button className="btn primary small" onClick={() => updateOrder(o.id, { status: 'sent_to_chef' })}>Send to Chef</button>}
-                        {o.paymentStatus !== 'paid' && <button className="btn gold small" onClick={() => updateOrder(o.id, { paymentStatus: 'paid' })}>Cash received ✓</button>}
-                      </div>
-                      {ratings.filter((r) => String(r.orderId) === String(o.id)).map((r, i) => <p key={i} className="muted">★ {r.stars}/5 — {r.feedback}</p>)}
+          <div className="savor">
+            <aside className="savor-side">
+              <div className="savor-logo"><span className="savor-hat">👨‍🍳</span><div><b>SAVOR</b><span>RESTAURANT</span></div></div>
+              <nav className="savor-nav">
+                <button className="active" onClick={() => document.getElementById('savor-top')?.scrollIntoView()}>▦ Dashboard</button>
+                <button onClick={() => document.getElementById('savor-orders')?.scrollIntoView({ behavior: 'smooth' })}>⚡ Live Orders {pendingCount > 0 && <span className="savor-badge">{pendingCount}</span>}</button>
+                <button onClick={() => document.getElementById('savor-menu')?.scrollIntoView({ behavior: 'smooth' })}>🍴 Menu</button>
+                <button onClick={() => document.getElementById('savor-qr')?.scrollIntoView({ behavior: 'smooth' })}>⊞ Tables &amp; QR</button>
+                <button onClick={() => setNotice('Customers list orders se banta hai — har order me customer ka naam aur table dikhta hai.')}>👥 Customers</button>
+                <button onClick={() => document.getElementById('savor-revenue')?.scrollIntoView({ behavior: 'smooth' })}>📊 Reports</button>
+                <button onClick={() => setNotice('Settings — abhi menu aur QR yahin se manage hote hain.')}>⚙️ Settings</button>
+              </nav>
+              <div className="savor-mood">Good Food<br />Good Mood</div>
+              <button className="savor-logout" onClick={() => setView('customer')}>← Logout</button>
+            </aside>
+            <div className="savor-main" id="savor-top">
+              <div className="savor-topbar">
+                <input type="text" placeholder="Search orders, tables..." value={mgrSearch} onChange={(e) => setMgrSearch(e.target.value)} />
+                <span className="savor-bell">🔔{pendingCount > 0 && <i />}</span>
+                <span className="savor-avatar">M</span><b>Manager</b>
+              </div>
+              <div className="savor-greet">
+                <div><h2>{mgrGreet}, Manager 👋</h2><p className="muted">Here&apos;s what&apos;s happening at your restaurant today.</p><p className="muted">📅 {mgrDate}</p></div>
+                <div className="savor-tagline">Eat · Enjoy · Repeat</div>
+              </div>
+              <div className="savor-stats">
+                <div className="savor-stat"><span className="savor-ic green">🛍️</span><div><b>{orders.length}</b><span>Today&apos;s Orders</span></div></div>
+                <div className="savor-stat"><span className="savor-ic gold">₹</span><div><b>{fmt(revenue)}</b><span>Revenue Today</span></div></div>
+                <div className="savor-stat"><span className="savor-ic green">🪑</span><div><b>{activeTables}</b><span>Active Tables</span></div></div>
+                <div className="savor-stat pink"><span className="savor-ic red">🕐</span><div><b>{pendingCount}</b><span>Pending Orders</span></div></div>
+              </div>
+              <div className="savor-grid">
+                <div className="card savor-card" id="savor-orders">
+                  <div className="row" style={{ justifyContent: 'space-between' }}><h2>⚡ Live Orders</h2><span className="muted">Avg rating {avgRating} / 5</span></div>
+                  {mgrOrders.length === 0 ? <p className="muted">No orders yet.</p> : (
+                    <div className="savor-tablewrap"><table className="savor-table">
+                      <thead><tr><th>Order ID</th><th>Table</th><th>Items</th><th>Total</th><th>Status</th><th>Time</th><th>Action</th></tr></thead>
+                      <tbody>{mgrOrders.map((o) => (
+                        <tr key={o.id}>
+                          <td><b>#{String(o.id).slice(0, 4)}</b></td>
+                          <td>{o.table}</td>
+                          <td>{o.items.map((it) => `${it.name} × ${it.qty}`).join(', ') || '—'}</td>
+                          <td><b>{fmt(o.total)}</b></td>
+                          <td><span className={`savor-pill ${o.status}`}>{STATUS_LABEL[o.status] || o.status}</span></td>
+                          <td>{new Date(o.createdAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</td>
+                          <td>{o.status === 'placed' && <><button className="btn green small" onClick={() => updateOrder(o.id, { status: 'verified' })}>Verify</button>{' '}<button className="btn small ghost" onClick={() => updateOrder(o.id, { status: 'rejected' })}>Reject</button></>}
+                            {o.status === 'verified' && <button className="btn primary small" onClick={() => updateOrder(o.id, { status: 'sent_to_chef' })}>Send to Chef</button>}
+                            {o.paymentStatus !== 'paid' && <button className="btn gold small" onClick={() => updateOrder(o.id, { paymentStatus: 'paid' })}>Cash received ✓</button>}
+                            {ratings.filter((r) => String(r.orderId) === String(o.id)).map((r, i) => <div key={i} className="muted">★ {r.stars}/5 — {r.feedback}</div>)}
+                          </td>
+                        </tr>
+                      ))}</tbody>
+                    </table></div>
+                  )}
+                </div>
+                <div className="card savor-card">
+                  <h2>⭐ Popular Items</h2>
+                  {popular.length === 0 ? <p className="muted">No orders yet — popular dishes yahan aayenge.</p> : popular.map((p) => (
+                    <div key={p.name} className="savor-pop">
+                      {p.img && <img src={p.img} alt={p.name} />}
+                      <div><b>{p.name}</b><span className="muted">{p.qty} orders</span><span className="savor-bar"><i style={{ width: `${Math.round((p.qty / popMax) * 100)}%` }} /></span></div>
                     </div>
                   ))}
                 </div>
-              );
-            })}
-            <div className="card"><h2>Table QR Codes</h2><p className="muted">Print these from the <a href="/qr">printable QR page</a>. Each QR opens the customer page for that table.</p>
-              <div className="qrgrid">{TABLES.map((t) => <div key={t}><img src={`/qr/table-${t.toLowerCase()}-qr.png`} alt={`QR for table ${t}`} /><p style={{ textAlign: 'center' }}><b>{t}</b><br /><span className="muted">{siteUrl}/?table={t}</span></p></div>)}</div>
+              </div>
+              <div className="savor-grid">
+                <div className="card savor-card" id="savor-revenue">
+                  <h2>📊 Revenue — Last 7 Days</h2>
+                  <div className="savor-bars">{last7.map((d) => (
+                    <div key={d.label} className="savor-barcol"><span>{d.rev ? fmt(d.rev) : ''}</span><i style={{ height: `${Math.max(4, Math.round((d.rev / maxDayRev) * 100))}%` }} /><b>{d.label}</b></div>
+                  ))}</div>
+                  <p className="muted">Total this week: {fmt(last7.reduce((s, d) => s + d.rev, 0))} · Only real orders counted.</p>
+                </div>
+                <div className="savor-promo">
+                  <div className="savor-promo-ic">🍽️</div>
+                  <h3>Smooth Service,<br />Happier Customers</h3>
+                  <button className="btn gold" onClick={() => document.getElementById('savor-menu')?.scrollIntoView({ behavior: 'smooth' })}>Manage Menu →</button>
+                </div>
+              </div>
+              <div className="card savor-card" id="savor-qr"><h2>Table QR Codes</h2><p className="muted">Print these from the <a href="/qr">printable QR page</a>. Each QR opens the customer page for that table.</p>
+                <div className="qrgrid">{TABLES.map((t) => <div key={t}><img src={`/qr/table-${t.toLowerCase()}-qr.png`} alt={`QR for table ${t}`} /><p style={{ textAlign: 'center' }}><b>{t}</b><br /><span className="muted">{siteUrl}/?table={t}</span></p></div>)}</div>
+              </div>
+              <div id="savor-menu"><ManagerMenu menu={menu} setMenu={setMenu} newDish={newDish} setNewDish={setNewDish} fetchData={fetchData} /></div>
             </div>
-            <ManagerMenu menu={menu} setMenu={setMenu} newDish={newDish} setNewDish={setNewDish} fetchData={fetchData} />
           </div>
         )}
 
