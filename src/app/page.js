@@ -295,7 +295,7 @@ function HomeInner() {
             {slideDish && (
               <div className="hero" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onTouchStart={() => setPaused(true)}>
                 <div className="progress">{highlights.map((d, i) => <button key={d.id} aria-label={d.name} onClick={() => setSlide(i)}><span style={{ width: i === slide ? '100%' : i < slide ? '100%' : '0%' }} /></button>)}</div>
-                <img key={slideDish.id} className="kenburns" src={slideDish.img} alt={slideDish.name} />
+                <img key={slideDish.id} className="kenburns" src={slideDish.img} alt={slideDish.name} onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?auto=format&fit=crop&w=800&q=80'; }} />
                 <button className="hero-nav prev" onClick={() => setSlide((slide - 1 + highlights.length) % highlights.length)}>‹</button>
                 <button className="hero-nav next" onClick={() => setSlide((slide + 1) % highlights.length)}>›</button>
                 <div className="hero-content">
@@ -313,7 +313,7 @@ function HomeInner() {
               <div className="grid" style={{ marginTop: 14 }}>
                 {visibleMenu.map((d) => (
                   <div key={d.id} className="dish card" style={{ margin: 0 }}>
-                    <img className="dish-img" src={d.img} alt={d.name} loading="lazy" />
+                    <img className="dish-img" src={d.img} alt={d.name} loading="lazy" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?auto=format&fit=crop&w=800&q=80'; }} />
                     <h3>{d.veg ? '🟢' : '🔴'} {d.name} {d.rating ? <span>★ {d.rating.toFixed(1)}</span> : null}</h3>
                     <p>{d.desc}</p>
                     <div className="row"><span className="price">{fmt(d.price)}</span><span className="chip">{d.category}</span>
