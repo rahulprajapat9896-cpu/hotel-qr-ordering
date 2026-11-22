@@ -193,15 +193,25 @@ function HomeInner() {
   const mgrTab = ['dashboard', 'orders', 'menu', 'qr', 'customers', 'history', 'reports', 'settings'].includes(tabParam) ? tabParam : 'dashboard';
   const chefTab = ['board', 'new', 'fire', 'ready'].includes(tabParam) ? tabParam : 'board';
   const waiterTab = ['board', 'ready', 'coming', 'served'].includes(tabParam) ? tabParam : 'board';
-  const customers = useMemo(() => {
-    const by = {};
-    orders.forEach((o) => {
-      const k = o.name || 'Guest';
-      by[k] = by[k] || { name: k, tables: new Set(), count: 0, total: 0, last: o.createdAt };
-      by[k].tables.add(o.table); by[k].count++; by[k].total += Number(o.total || 0);
-      if (new Date(o.createdAt) > new Date(by[k].last)) by[k].last = o.createdAt;
+  // --- Visits: one guest sitting = one visit. A new visit starts on a table
+  // when all of the previous sitting's orders are served/rejected, so the
+  // next guest on the same table gets a separate history, never merged. ---
+  const visits = useMemo(() => {
+    const sorted = [...orders].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    const byTable = {};
+    const all = [];
+    sorted.forEach((o) => {
+      let v = byTable[o.table];
+      const closed = v && v.orders.every((x) => ['served', 'rejected'].includes(x.status));
+      if (!v || closed) {
+        v = { key: `${o.table}-${all.filter((x) => x.table === o.table).length + 1}`, table: o.table, visitNo: all.filter((x) => x.table === o.table).length + 1, name: o.name || 'Guest', orders: [], first: o.createdAt, last: o.createdAt };
+        all.push(v); byTable[o.table] = v;
+      }
+      if (o.name && o.name !== 'Guest') v.name = o.name;
+      v.orders.push(o);
+      v.last = o.createdAt;
     });
-    return Object.values(by).sort((a, b) => b.total - a.total);
+    return all.sort((a, b) => new Date(b.first) - new Date(a.first));
   }, [orders]);
   const visibleMenu = menu.filter((d) => (cat === 'All' || d.category === cat) && d.available !== false);
   const slideDish = highlights[slide % Math.max(1, highlights.length)];
@@ -439,19 +449,25 @@ function HomeInner() {
               {mgrTab === 'menu' && (<div id="savor-menu"><ManagerMenu menu={menu} setMenu={setMenu} newDish={newDish} setNewDish={setNewDish} fetchData={fetchData} /></div>)}
               {mgrTab === 'customers' && (
               <div className="card savor-card">
-                <h2>👥 Customers</h2>
-                {customers.length === 0 ? <p className="muted">Abhi tak koi order nahi hai.</p> : (
+                <h2>👥 Customers — har guest ki alag visit</h2>
+                <p className="muted">Ek guest kha ke gaya, phir dusra usi table pe baitha — dono ki history alag dikhegi. Jab table ke saare order serve ho jayenge, uske baad ka naya order nayi visit ban jayega.</p>
+                {visits.length === 0 ? <p className="muted">Abhi tak koi order nahi hai.</p> : (
                   <div className="savor-tablewrap"><table className="savor-table">
-                    <thead><tr><th>Name</th><th>Tables</th><th>Orders</th><th>Total Spent</th><th>Last Order</th></tr></thead>
-                    <tbody>{customers.map((c) => (
-                      <tr key={c.name}>
-                        <td><b>{c.name}</b></td>
-                        <td>{[...c.tables].join(', ')}</td>
-                        <td>{c.count}</td>
-                        <td><b>{fmt(c.total)}</b></td>
-                        <td>{new Date(c.last).toLocaleString('en-IN')}</td>
-                      </tr>
-                    ))}</tbody>
+                    <thead><tr><th>Guest</th><th>Table</th><th>Visit</th><th>Orders</th><th>Items</th><th>Total Spent</th><th>Time</th><th>Status</th></tr></thead>
+                    <tbody>{visits.map((v) => {
+                      const active = v.orders.some((x) => !['served', 'rejected'].includes(x.status));
+                      return (
+                      <tr key={v.key}>
+                        <td><b>{v.name}</b></td>
+                        <td>{v.table}</td>
+                        <td>Visit {v.visitNo}</td>
+                        <td>{v.orders.length}</td>
+                        <td>{v.orders.flatMap((o) => o.items || []).map((it) => `${it.name} × ${it.qty}`).join(', ') || '—'}</td>
+                        <td><b>{fmt(v.orders.reduce((s, o) => s + Number(o.total || 0), 0))}</b></td>
+                        <td>{new Date(v.first).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</td>
+                        <td><span className={`savor-pill ${active ? 'preparing' : 'served'}`}>{active ? 'Sitting Now' : 'Left'}</span></td>
+                      </tr>);
+                    })}</tbody>
                   </table></div>
                 )}
               </div>
