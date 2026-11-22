@@ -40,6 +40,7 @@ function HomeInner() {
   const [notice, setNotice] = useState('');
   const [mgrSearch, setMgrSearch] = useState('');
   const [histDate, setHistDate] = useState(() => new Date().toLocaleDateString('en-CA'));
+  const [custTab, setCustTab] = useState('menu');
   const [newDish, setNewDish] = useState({ name: '', category: 'Starters', price: '', img: '' });
   const prevReady = useRef(new Set());
 
@@ -221,7 +222,24 @@ function HomeInner() {
         {notice && <div className="card" role="status">{notice} <button className="btn small ghost" onClick={() => setNotice('')}>Dismiss</button></div>}
 
         {view === 'customer' && (
-          <div>
+          <div className="savor">
+            <aside className="savor-side">
+              <div className="savor-logo"><span className="savor-hat">👨‍🍳</span><div><b>SAVOR</b><span>RESTAURANT</span></div></div>
+              <nav className="savor-nav">
+                <a className={custTab === 'menu' ? 'active' : ''} href="#" onClick={(e) => { e.preventDefault(); setCustTab('menu'); }}>🍴 Menu</a>
+                <a className={custTab === 'orders' ? 'active' : ''} href="#" onClick={(e) => { e.preventDefault(); setCustTab('orders'); }}>🕐 My Orders</a>
+                <a className={custTab === 'info' ? 'active' : ''} href="#" onClick={(e) => { e.preventDefault(); setCustTab('info'); }}>🪑 Table Info</a>
+              </nav>
+              <div className="savor-mood">Good Food<br />Good Mood ❤️</div>
+            </aside>
+            <div className="savor-main">
+            {table && (
+              <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+                <span className="chip green">🍽️ Table {table} &nbsp;● Online</span>
+                <button className="btn small ghost" onClick={() => window.location.reload()}>🔳 Scan Again</button>
+              </div>
+            )}
+            {custTab === 'menu' && (<>
             {!table ? (
               <div className="card">
                 <h2>Welcome! Scan complete — choose your table</h2>
@@ -232,6 +250,7 @@ function HomeInner() {
               <div className="card"><div className="row"><span className="chip green">Table {table}</span><span className="muted">You are ordering for table {table}.</span><button className="btn small ghost" onClick={() => setTable('')}>Change table</button></div></div>
             )}
 
+            <div className="savor-hero-text"><h2>Delicious Food,<br /><span>Just a Scan Away!</span></h2><p className="muted">Order your favourite dishes easily</p></div>
             {slideDish && (
               <div className="hero" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onTouchStart={() => setPaused(true)}>
                 <div className="progress">{highlights.map((d, i) => <button key={d.id} aria-label={d.name} onClick={() => setSlide(i)}><span style={{ width: i === slide ? '100%' : i < slide ? '100%' : '0%' }} /></button>)}</div>
@@ -247,7 +266,7 @@ function HomeInner() {
               </div>
             )}
 
-            <div className="card">
+            <div className="savor-custgrid"><div className="card" id="savor-menu-list">
               <h2>Menu</h2>
               <div className="row">{['All', ...CATEGORIES].map((c) => <button key={c} className={`btn small ${cat === c ? 'primary' : 'ghost'}`} onClick={() => setCat(c)}>{c}</button>)}</div>
               <div className="grid" style={{ marginTop: 14 }}>
@@ -264,10 +283,9 @@ function HomeInner() {
                 ))}
               </div>
             </div>
-
-            <div className="card" id="bill">
-              <h2>Your Bill {table ? `· Table ${table}` : ''}</h2>
-              {cartItems.length === 0 ? <p className="muted">Cart is empty.</p> : cartItems.map((x) => (
+            <div className="card savor-cart" id="bill">
+              <h2>🛒 Your Cart {cartItems.length > 0 ? `· ${cartItems.reduce((s, x) => s + x.qty, 0)} items` : ''}</h2>
+              {cartItems.length === 0 ? <div style={{ textAlign: 'center', padding: '24px 0' }}><div style={{ fontSize: 48 }}>🛒</div><p><b>Your cart is empty</b></p><p className="muted">Add some delicious items!</p><button className="btn primary" onClick={() => document.getElementById('savor-menu-list')?.scrollIntoView({ behavior: 'smooth' })}>Browse Menu →</button></div> : cartItems.map((x) => (
                 <div key={x.dish.id} className="row" style={{ justifyContent: 'space-between' }}><span>{x.dish.name} × {x.qty}</span><span className="row"><button className="btn small ghost" onClick={() => setQty(x.dish.id, x.qty - 1)}>−</button><button className="btn small ghost" onClick={() => setQty(x.dish.id, x.qty + 1)}>+</button><span>{fmt(x.dish.price * x.qty)}</span><button className="btn small ghost" onClick={() => setQty(x.dish.id, 0)}>Remove</button></span></div>
               ))}
               <hr />
@@ -282,9 +300,10 @@ function HomeInner() {
               </div>
               <p className="muted">{payment === 'UPI' ? 'Pay at the table on the hotel UPI ID shown by the waiter, then place the order. The manager confirms receipt.' : 'Pay cash at the counter. The manager confirms receipt.'}</p>
               <button className="btn primary" onClick={placeOrder} disabled={!cartItems.length}>Place Order · {fmt(total)}</button>
-            </div>
-
-            {myOrder && (
+            </div></div>
+            <div className="card"><div className="row" style={{ justifyContent: 'space-between' }}><span>ℹ️ Enjoy your meal! ❤️</span><button className="btn gold" onClick={placeOrder} disabled={!cartItems.length}>➤ Place Order · {fmt(total)}</button></div></div>
+            </>)}
+            {custTab === 'orders' && myOrder && (
               <div className="card">
                 <h2>Live Order Status</h2>
                 <p><b>Order {String(myOrder.id).slice(0, 8)}</b> · Table {myOrder.table} · {fmt(myOrder.total)} · {myOrder.paymentMethod} ({myOrder.paymentStatus})</p>
@@ -294,11 +313,14 @@ function HomeInner() {
                 {myOrder.status === 'served' && <RatingBox orderId={myOrder.id} onSubmit={submitRating} done={ratings.some((r) => String(r.orderId) === String(myOrder.id))} />}
               </div>
             )}
+            {custTab === 'orders' && !myOrder && (<div className="card"><h2>My Orders</h2><p className="muted">Abhi tak koi order nahi hai — menu se dish add karo aur order place karo.</p></div>)}
+            {custTab === 'info' && (<div className="card"><h2>🪑 Table Info</h2><p><b>Table:</b> {table || 'Not selected'}</p><p><b>Status:</b> {table ? 'Online' : '—'}</p><p className="muted">Is table ka QR scan karke ye page khula hai. Order karne ke liye Menu tab pe jao.</p>{table && <button className="btn small ghost" onClick={() => setTable('')}>Change table</button>}</div>)}
             {cartItems.length > 0 && (
               <button className="cart-fab" onClick={() => document.getElementById('bill')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
                 🛒 Cart · {cartItems.reduce((s, x) => s + x.qty, 0)} items · {fmt(total)}
               </button>
             )}
+            </div>
           </div>
         )}
 
