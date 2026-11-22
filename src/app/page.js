@@ -351,7 +351,7 @@ function HomeInner() {
                   {popular.length === 0 ? <p className="muted">No orders yet — popular dishes yahan aayenge.</p> : popular.map((p) => (
                     <div key={p.name} className="savor-pop">
                       {p.img && <img src={p.img} alt={p.name} />}
-                      <div><b>{p.name}</b><span className="muted">{p.qty} orders</span><span className="savor-bar"><i style={{ width: `${Math.round((p.qty / popMax) * 100)}%` }} /></span></div>
+                      <div><b>{p.name}</b><span className="muted">{p.qty} order{p.qty === 1 ? '' : 's'}</span><span className="savor-bar"><i style={{ width: `${Math.round((p.qty / popMax) * 100)}%` }} /></span></div>
                     </div>
                   ))}
                 </div>
