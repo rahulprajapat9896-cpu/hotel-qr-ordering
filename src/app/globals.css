@@ -82,8 +82,8 @@ label { font-size: 13px; font-weight: 800; }
 .savor-logo span { font-size: 10px; letter-spacing: 4px; color: #ffb703; font-weight: 700; }
 .savor-hat { font-size: 34px; }
 .savor-nav { display: flex; flex-direction: column; gap: 4px; }
-.savor-nav button { text-align: left; background: transparent; border: 0; color: #d8e8d8; padding: 11px 12px; border-radius: 12px; font-weight: 700; font-size: 15px; }
-.savor-nav button.active, .savor-nav button:hover { background: #1e4d2e; color: #fff; }
+.savor-nav button, .savor-nav a { display: block; text-align: left; background: transparent; border: 0; color: #d8e8d8; padding: 11px 12px; border-radius: 12px; font-weight: 700; font-size: 15px; text-decoration: none; }
+.savor-nav button.active, .savor-nav button:hover, .savor-nav a.active, .savor-nav a:hover { background: #1e4d2e; color: #fff; }
 .savor-badge { background: #e4572e; color: #fff; border-radius: 999px; padding: 1px 8px; font-size: 12px; margin-left: 6px; }
 .savor-mood { font-family: 'Fraunces', Georgia, serif; font-size: 24px; color: #ffb703; padding: 10px; line-height: 1.2; }
 .savor-logout { margin-top: auto; background: transparent; border: 1px solid rgba(255,255,255,.3); color: #fff; border-radius: 999px; padding: 10px; font-weight: 700; }
