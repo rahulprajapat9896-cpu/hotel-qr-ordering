@@ -139,3 +139,11 @@ insert into menu_items (id, name, category, price, veg, image_url, description, 
   on conflict (id) do nothing;
 
 select pg_catalog.setval(pg_get_serial_sequence('menu_items','id'), (select max(id) from menu_items));
+
+-- Settings (key/value): hotel_location drives the QR geofence
+create table if not exists settings (
+  key text primary key,
+  value text not null,
+  updated_at timestamptz not null default now()
+);
+alter table settings disable row level security;

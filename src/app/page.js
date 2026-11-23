@@ -44,6 +44,9 @@ function HomeInner() {
   const [cart, setCart] = useState({}); // dishId -> qty
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
+  const [hotelLoc, setHotelLoc] = useState(null); // { lat, lng, radius } — null = QR protection off
+  const [geoStatus, setGeoStatus] = useState('idle'); // idle | checking | inside | outside | denied | unsupported
+  const [locForm, setLocForm] = useState({ lat: '', lng: '', radius: '150' });
   const [payment, setPayment] = useState('UPI');
   const [myOrderId, setMyOrderId] = useState(null);
   const [slide, setSlide] = useState(0);
@@ -98,6 +101,13 @@ function HomeInner() {
       }
       const { data: r } = await supabase.from('ratings').select('*');
       if (r) setRatings(r.map((x) => ({ orderId: x.order_id, stars: x.stars, feedback: x.feedback })));
+      const { data: st } = await supabase.from('settings').select('*');
+      if (st) {
+        const row = st.find((x) => x.key === 'hotel_location');
+        let next = null;
+        try { next = row ? JSON.parse(row.value) : null; } catch (e) { next = null; }
+        setHotelLoc((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+      }
       const { data: cm } = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true });
       if (cm) {
         const mapped = cm.map((x) => ({ id: x.id, table: x.table_no, sender: x.sender, senderName: x.sender_name, text: x.message, readByManager: x.read_by_manager, readByCustomer: x.read_by_customer, createdAt: x.created_at }));
@@ -212,9 +222,56 @@ function HomeInner() {
   const addToCart = (id) => setCart((c) => ({ ...c, [id]: (c[id] || 0) + 1 }));
   const setQty = (id, q) => setCart((c) => { const n = { ...c }; if (q <= 0) delete n[id]; else n[id] = q; return n; });
 
+  // --- QR protection: order only from inside the hotel (geofence) ---
+  function distanceMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371000; const toRad = (d) => d * Math.PI / 180;
+    const a = Math.sin(toRad(lat2 - lat1) / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(toRad(lon2 - lon1) / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+  function checkLocation() {
+    if (!hotelLoc || !hotelLoc.lat || !hotelLoc.lng) { setGeoStatus('idle'); return; }
+    if (!navigator.geolocation) { setGeoStatus('unsupported'); return; }
+    setGeoStatus('checking');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const d = distanceMeters(pos.coords.latitude, pos.coords.longitude, hotelLoc.lat, hotelLoc.lng);
+        setGeoStatus(d <= (hotelLoc.radius || 150) ? 'inside' : 'outside');
+      },
+      () => setGeoStatus('denied'),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  }
+  useEffect(() => { if (view === 'customer' && table) checkLocation(); }, [view, table, hotelLoc]);
+  useEffect(() => { if (hotelLoc) setLocForm({ lat: String(hotelLoc.lat), lng: String(hotelLoc.lng), radius: String(hotelLoc.radius || 150) }); }, [hotelLoc]);
+  async function useMyLocation() {
+    if (!navigator.geolocation) { setNotice('Is browser me location support nahi hai.'); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setLocForm((f) => ({ ...f, lat: String(pos.coords.latitude.toFixed(6)), lng: String(pos.coords.longitude.toFixed(6)) })); setNotice('Current location bhar di — Save dabao.'); },
+      () => setNotice('Location allow nahi hui — browser ki permission on karo.'),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+  async function saveHotelLocation() {
+    const lat = parseFloat(locForm.lat); const lng = parseFloat(locForm.lng);
+    const radius = Math.max(50, Math.min(1000, parseInt(locForm.radius || '150', 10) || 150));
+    if (Number.isNaN(lat) || lat < -90 || lat > 90 || Number.isNaN(lng) || lng < -180 || lng > 180) { setNotice('Sahi latitude (-90 se 90) aur longitude (-180 se 180) bharo.'); return; }
+    const value = { lat, lng, radius };
+    if (supabase) await supabase.from('settings').upsert({ key: 'hotel_location', value: JSON.stringify(value) });
+    setHotelLoc(value); setNotice('Hotel location save ho gayi — QR protection ON hai.');
+  }
+  async function clearHotelLocation() {
+    if (supabase) await supabase.from('settings').delete().eq('key', 'hotel_location');
+    setHotelLoc(null); setNotice('Location protection band kar di.');
+  }
+
   async function placeOrder() {
     if (!table) { setNotice('Please choose your table first (T1–T4).'); return; }
     if (!cartItems.length) { setNotice('Your cart is empty — add a dish first.'); return; }
+    if (hotelLoc && geoStatus !== 'inside') {
+      if (geoStatus === 'checking') { setNotice('Location check ho rahi hai — 2 second ruk kar dobara try karo.'); return; }
+      setNotice('Aap hotel ke paas nahi hain — table pe baith kar order karo. Phone ki location on karke dobara check karo.');
+      return;
+    }
     if (!name.trim()) { setNotice('Please enter your name to place the order.'); return; }
     if (!/^[6-9]\d{9}$/.test(mobile.trim())) { setNotice('Please enter a valid 10-digit mobile number.'); return; }
     const items = cartItems.map((x) => ({ id: x.dish.id, name: x.dish.name, price: x.dish.price, qty: x.qty }));
@@ -393,6 +450,15 @@ function HomeInner() {
             {table && (
               <div className="row" style={{ marginBottom: 12 }}>
                 <span className="chip green">🍽️ Table {table} &nbsp;● Online</span>
+              </div>
+            )}
+            {view === 'customer' && hotelLoc && geoStatus !== 'inside' && geoStatus !== 'idle' && (
+              <div className="card" style={{ background: geoStatus === 'checking' ? '#fff3cd' : '#fde8e8' }}>
+                <p><b>📍 Location check</b></p>
+                {geoStatus === 'checking' && <p className="muted">Aapki location check ho rahi hai...</p>}
+                {geoStatus === 'outside' && <p>Aap hotel ke paas nahi hain — QR ki photo se bahar se order nahi hoga. Table pe baith kar order karo.</p>}
+                {(geoStatus === 'denied' || geoStatus === 'unsupported') && <p>Order karne ke liye phone ki location on karo aur allow karo.</p>}
+                <button className="btn primary small" onClick={checkLocation}>🔄 Location dobara check karo</button>
               </div>
             )}
             {custTab === 'menu' && (<>
@@ -682,6 +748,21 @@ function HomeInner() {
                 <p><b>Tables:</b> T1, T2, T3, T4</p>
                 <p><b>Payment:</b> UPI (pay at table) and Cash (at counter) — manager confirms receipt.</p>
                 <p><b>GST:</b> 5% on every bill.</p>
+                <hr />
+                <h3>📍 Location Protection — QR photo se bahar order rokna</h3>
+                <p className="muted">Customer ka order tabhi place hoga jab uska phone hotel ke {locForm.radius || 150} meter ke andar ho. Location set karne ke liye hotel me khade hokar "Meri current location" dabao, phir Save karo.</p>
+                <p><b>Status:</b> {hotelLoc ? `ON — ${hotelLoc.lat}, ${hotelLoc.lng} · ${hotelLoc.radius || 150}m` : 'OFF — location set nahi hai, abhi bahar se bhi order ho sakta hai'}</p>
+                <label>Latitude</label>
+                <input type="text" value={locForm.lat} onChange={(e) => setLocForm((f) => ({ ...f, lat: e.target.value }))} placeholder="e.g. 29.9695" />
+                <label>Longitude</label>
+                <input type="text" value={locForm.lng} onChange={(e) => setLocForm((f) => ({ ...f, lng: e.target.value }))} placeholder="e.g. 76.8783" />
+                <label>Radius (meter)</label>
+                <input type="number" value={locForm.radius} onChange={(e) => setLocForm((f) => ({ ...f, radius: e.target.value }))} placeholder="150" />
+                <div className="row">
+                  <button className="btn small" onClick={useMyLocation}>📍 Meri current location use karo</button>
+                  <button className="btn primary small" onClick={saveHotelLocation}>Save location</button>
+                  {hotelLoc && <button className="btn small ghost" onClick={clearHotelLocation}>Protection band karo</button>}
+                </div>
                 <p><a href="/qr">Print Table QR Codes →</a></p>
                 <p className="muted">Menu aur QR apne alag pages se manage hote hain.</p>
               </div>
