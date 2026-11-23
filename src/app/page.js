@@ -70,7 +70,8 @@ function HomeInner() {
   const chatBoxRef = useRef(null);
   const firstLoadDone = useRef(false);
   const servedSeenAt = useRef({}); // table -> client time (ms) its visit was first seen complete
-  const fetchSeq = useRef(0); // latest fetchData call wins; older completions are discarded
+  const fetchSeq = useRef(0); // counts fetchData calls
+  const lastAppliedSeq = useRef(0); // seq of the newest result actually applied
 
   // --- Separate links: ?table=T1..T4 locks to Customer, ?view=manager/chef/waiter/customer locks to that page ---
   // A customer who scanned a table QR must never see the staff switcher.
@@ -90,13 +91,14 @@ function HomeInner() {
     if (['customer', 'manager', 'chef', 'waiter'].includes(v)) setView(v);
   }, [params, tableParam]);
 
-  // All six queries run IN PARALLEL and only the latest poll's result
-  // is applied. Before this, the six queries ran one after another
-  // (~1s each, so a whole load took ~6s), and polls overlapped and
-  // finished out of order — an older, slower completion could
-  // overwrite fresh data with stale data. That stale data is what
-  // made the manager page look empty, hid the customer messages,
-  // cleared the chat early, and left the geofence location unloaded.
+  // All six queries run IN PARALLEL and a result is applied only if
+  // it is newer than the last result applied. Before this, the six
+  // queries ran one after another (~1s each, so a whole load took
+  // ~6s), and polls overlapped and finished out of order — an older,
+  // slower completion could overwrite fresh data with stale data.
+  // That stale data is what made the manager page look empty, hid
+  // the customer messages, cleared the chat early, and left the
+  // geofence location unloaded.
   const fetchData = useCallback(async () => {
     if (!supabase) return;
     const mySeq = ++fetchSeq.current;
@@ -108,7 +110,8 @@ function HomeInner() {
       supabase.from('settings').select('*'),
       supabase.from('chat_messages').select('*').order('created_at', { ascending: true }),
     ]);
-    if (mySeq !== fetchSeq.current) return; // a newer poll started — this result is stale, discard it
+    if (mySeq <= lastAppliedSeq.current) return; // a newer result was already applied — this one is stale, discard it
+    lastAppliedSeq.current = mySeq;
     const m = mRes.status === 'fulfilled' ? mRes.value.data : null;
     const o = oRes.status === 'fulfilled' ? oRes.value.data : null;
     const oi = oiRes.status === 'fulfilled' ? oiRes.value.data : null;
