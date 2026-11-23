@@ -72,6 +72,7 @@ function HomeInner() {
   const servedSeenAt = useRef({}); // table -> client time (ms) its visit was first seen complete
   const fetchSeq = useRef(0); // counts fetchData calls
   const lastAppliedSeq = useRef(0); // seq of the newest result actually applied
+  const locLoaded = useRef(false); // true once the settings (hotel location) have been fetched at least once
 
   // --- Separate links: ?table=T1..T4 locks to Customer, ?view=manager/chef/waiter/customer locks to that page ---
   // A customer who scanned a table QR must never see the staff switcher.
@@ -132,6 +133,7 @@ function HomeInner() {
       try { next = row ? JSON.parse(row.value) : null; } catch (e) { next = null; }
       setHotelLoc((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
     }
+    locLoaded.current = true; // settings attempted (even if the load failed) — the order gate below can now decide
     if (cm) {
       const mapped = cm.map((x) => ({ id: x.id, table: x.table_no, sender: x.sender, senderName: x.sender_name, text: x.message, readByManager: x.read_by_manager, readByCustomer: x.read_by_customer, createdAt: x.created_at }));
       // Chat refresh: once a table's visit is complete (it has orders and
@@ -297,6 +299,7 @@ function HomeInner() {
   async function placeOrder() {
     if (!table) { setNotice('Please choose your table first (T1–T4).'); return; }
     if (!cartItems.length) { setNotice('Your cart is empty — add a dish first.'); return; }
+    if (supabase && !locLoaded.current) { setNotice('Location check ho raha hai — 2 second ruko, phir try karo.'); return; }
     if (hotelLoc && geoStatus !== 'inside') {
       if (geoStatus === 'checking') { setNotice('Location check ho rahi hai — 2 second ruk kar dobara try karo.'); return; }
       setNotice('Aap hotel ke paas nahi hain — table pe baith kar order karo. Phone ki location on karke dobara check karo.');
