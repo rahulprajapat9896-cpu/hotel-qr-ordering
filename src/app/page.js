@@ -116,13 +116,16 @@ function HomeInner() {
         // Chat refresh: once a table's visit is complete (it has orders and
         // none are active), clear its whole chat 2 minutes after the last
         // order was served/rejected, so the next guest starts fresh.
-        // Orders served before served_at existed count as long finished.
+        // Orders served before served_at existed have no timestamp — ignore
+        // them instead of treating them as finished long ago, or the chat
+        // would clear the moment any newer order is served.
         const refreshTables = new Set();
         TABLES.forEach((t) => {
           const tOrders = (o || []).filter((x) => x.table_no === t);
           if (!tOrders.length || !tOrders.every((x) => ['served', 'rejected'].includes(x.status))) return;
-          const times = tOrders.map((x) => x.served_at ? new Date(x.served_at).getTime() : 0);
-          const doneAt = times.some((v) => v === 0) ? 0 : Math.max(...times);
+          const times = tOrders.map((x) => x.served_at ? new Date(x.served_at).getTime() : null).filter((v) => v !== null);
+          if (!times.length) return;
+          const doneAt = Math.max(...times);
           if (Date.now() - doneAt > 2 * 60 * 1000) refreshTables.add(t);
         });
         if (refreshTables.size) {
