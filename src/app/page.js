@@ -98,7 +98,22 @@ function HomeInner() {
       const { data: r } = await supabase.from('ratings').select('*');
       if (r) setRatings(r.map((x) => ({ orderId: x.order_id, stars: x.stars, feedback: x.feedback })));
       const { data: cm } = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true });
-      if (cm) setMessages(cm.map((x) => ({ id: x.id, table: x.table_no, sender: x.sender, senderName: x.sender_name, text: x.message, readByManager: x.read_by_manager, readByCustomer: x.read_by_customer, createdAt: x.created_at })));
+      if (cm) {
+        const mapped = cm.map((x) => ({ id: x.id, table: x.table_no, sender: x.sender, senderName: x.sender_name, text: x.message, readByManager: x.read_by_manager, readByCustomer: x.read_by_customer, createdAt: x.created_at }));
+        // Delete-after-seen: once a table's visit is complete (it has orders
+        // and none are active), drop the messages the reader has already
+        // seen, so the chat box refreshes for the next guest. Unseen
+        // messages stay until the manager/customer actually reads them.
+        const doneTables = new Set();
+        TABLES.forEach((t) => {
+          const tOrders = (o || []).filter((x) => x.table_no === t);
+          if (tOrders.length && tOrders.every((x) => ['served', 'rejected'].includes(x.status))) doneTables.add(t);
+        });
+        const isSeen = (m) => m.sender === 'customer' ? m.readByManager : m.readByCustomer;
+        const seenIds = mapped.filter((m) => doneTables.has(m.table) && isSeen(m)).map((m) => m.id);
+        setMessages(mapped.filter((m) => !(doneTables.has(m.table) && isSeen(m))));
+        if (seenIds.length) supabase.from('chat_messages').delete().in('id', seenIds).then(() => {});
+      }
     } catch { /* offline / not configured yet — local fallback stays */ }
   }, []);
 
