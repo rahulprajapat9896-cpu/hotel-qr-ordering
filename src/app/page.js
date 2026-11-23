@@ -186,7 +186,11 @@ function HomeInner() {
 
   const myOrder = orders.find((o) => String(o.id) === String(myOrderId));
   const avgRating = ratings.length ? (ratings.reduce((s, r) => s + r.stars, 0) / ratings.length).toFixed(1) : '—';
-  const revenue = orders.filter((o) => o.status !== 'rejected').reduce((s, o) => s + Number(o.total || 0), 0);
+  // --- Daily stats: only today's orders (local date), so the numbers reset
+  // every morning instead of accumulating all orders ever placed. ---
+  const todayKey = new Date().toLocaleDateString('en-CA');
+  const todayOrders = orders.filter((o) => new Date(o.createdAt).toLocaleDateString('en-CA') === todayKey);
+  const revenue = todayOrders.filter((o) => o.status !== 'rejected').reduce((s, o) => s + Number(o.total || 0), 0);
   // --- RAHUL manager dashboard (real data only, nothing invented) ---
   const mgrHour = new Date().getHours();
   const mgrGreet = mgrHour < 12 ? 'Good morning' : mgrHour < 17 ? 'Good afternoon' : 'Good evening';
@@ -200,9 +204,9 @@ function HomeInner() {
   });
   const popular = useMemo(() => {
     const counts = {};
-    orders.forEach((o) => (o.items || []).forEach((it) => { counts[it.name] = (counts[it.name] || 0) + Number(it.qty || 0); }));
+    todayOrders.forEach((o) => (o.items || []).forEach((it) => { counts[it.name] = (counts[it.name] || 0) + Number(it.qty || 0); }));
     return Object.entries(counts).map(([name, qty]) => ({ name, qty, img: (menu.find((d) => d.name === name) || {}).img || '' })).sort((a, b) => b.qty - a.qty).slice(0, 4);
-  }, [orders, menu]);
+  }, [todayOrders, menu]);
   const popMax = Math.max(1, ...popular.map((p) => p.qty));
   const last7 = useMemo(() => {
     const days = [];
@@ -397,7 +401,7 @@ function HomeInner() {
                 <div className="savor-tagline">Eat · Enjoy · Repeat</div>
               </div>
               <div className="savor-stats">
-                <div className="savor-stat"><span className="savor-ic green">🛍️</span><div><b>{orders.length}</b><span>Today&apos;s Orders</span></div></div>
+                <div className="savor-stat"><span className="savor-ic green">🛍️</span><div><b>{todayOrders.length}</b><span>Today&apos;s Orders</span></div></div>
                 <div className="savor-stat"><span className="savor-ic gold">₹</span><div><b>{fmt(revenue)}</b><span>Revenue Today</span></div></div>
                 <div className="savor-stat"><span className="savor-ic green">🪑</span><div><b>{activeTables}</b><span>Active Tables</span></div></div>
                 <div className="savor-stat pink"><span className="savor-ic red">🕐</span><div><b>{pendingCount}</b><span>Pending Orders</span></div></div>
