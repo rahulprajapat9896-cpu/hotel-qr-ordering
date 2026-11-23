@@ -52,6 +52,8 @@ function HomeInner() {
   const [slide, setSlide] = useState(0);
   const [paused, setPaused] = useState(false);
   const [cat, setCat] = useState('All');
+  const [diet, setDiet] = useState('all'); // all | veg | nonveg
+  const [catOpen, setCatOpen] = useState(false);
   const [notice, setNotice] = useState('');
   const [mgrSearch, setMgrSearch] = useState('');
   const [histDate, setHistDate] = useState(() => new Date().toLocaleDateString('en-CA'));
@@ -286,7 +288,7 @@ function HomeInner() {
       const id = `local-${Date.now()}`;
       setMyOrderId(id); setOrders((o) => [{ ...base, id }, ...o]);
     }
-    setCart({}); setNotice('Order placed! Track it live below.');
+    setCart({}); setCustTab('orders'); setNotice('Order placed! Track it live in My Orders.');
   }
 
   async function updateOrder(id, patch) {
@@ -415,7 +417,8 @@ function HomeInner() {
     });
     return all.sort((a, b) => new Date(b.first) - new Date(a.first));
   }, [orders]);
-  const visibleMenu = menu.filter((d) => (cat === 'All' || d.category === cat) && d.available !== false);
+  const visibleMenu = menu.filter((d) => (cat === 'All' || d.category === cat) && d.available !== false && (diet === 'all' || (diet === 'veg' ? d.veg : !d.veg)));
+  const cartCount = cartItems.reduce((s, x) => s + x.qty, 0);
   const slideDish = highlights[slide % Math.max(1, highlights.length)];
   const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://hotel-qr-ordering-alpha.vercel.app';
 
@@ -430,6 +433,7 @@ function HomeInner() {
         {view === 'customer' && (
           <nav className="cust-tabs">
             <button className={custTab === 'menu' ? 'active' : ''} onClick={() => setCustTab('menu')}>🍴 Menu</button>
+            <button className={custTab === 'cart' ? 'active' : ''} onClick={() => setCustTab('cart')}>🛒 Cart {cartCount > 0 && <span className="savor-badge">{cartCount}</span>}</button>
             <button className={custTab === 'orders' ? 'active' : ''} onClick={() => setCustTab('orders')}>🕐 My Orders</button>
             <button className={custTab === 'info' ? 'active' : ''} onClick={() => setCustTab('info')}>🪑 Table Info</button>
             <button className={custTab === 'chat' ? 'active' : ''} onClick={() => setCustTab('chat')}>💬 Chat {custUnread > 0 && <span className="savor-badge">{custUnread}</span>}</button>
@@ -488,9 +492,17 @@ function HomeInner() {
               </div>
             )}
 
-            <div className="savor-custgrid"><div className="card" id="savor-menu-list">
-              <h2>Menu</h2>
-              <div className="row">{['All', ...CATEGORIES].map((c) => <button key={c} className={`btn small ${cat === c ? 'primary' : 'ghost'}`} onClick={() => setCat(c)}>{c}</button>)}</div>
+            <div className="card" id="savor-menu-list">
+              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2 style={{ margin: 0 }}>Menu</h2>
+                <button className="btn small" onClick={() => setCatOpen(true)}>☰ Categories</button>
+              </div>
+              {(cat !== 'All' || diet !== 'all') && (
+                <p className="muted" style={{ marginTop: 8 }}>
+                  Showing: <b>{cat}{diet !== 'all' ? ` · ${diet === 'veg' ? 'Veg only' : 'Non-Veg only'}` : ''}</b>{' '}
+                  <button className="btn small ghost" onClick={() => { setCat('All'); setDiet('all'); }}>✕ Clear filters</button>
+                </p>
+              )}
               <div className="grid" style={{ marginTop: 14 }}>
                 {visibleMenu.map((d) => (
                   <div key={d.id} className="dish card" style={{ margin: 0 }}>
@@ -505,9 +517,26 @@ function HomeInner() {
                 ))}
               </div>
             </div>
-            <div className="card savor-cart" id="bill">
-              <h2>🛒 Your Cart {cartItems.length > 0 ? `· ${cartItems.reduce((s, x) => s + x.qty, 0)} items` : ''}</h2>
-              {cartItems.length === 0 ? <div style={{ textAlign: 'center', padding: '24px 0' }}><div style={{ fontSize: 48 }}>🛒</div><p><b>Your cart is empty</b></p><p className="muted">Add some delicious items!</p><button className="btn primary" onClick={() => document.getElementById('savor-menu-list')?.scrollIntoView({ behavior: 'smooth' })}>Browse Menu →</button></div> : cartItems.map((x) => (
+            {catOpen && (<>
+              <div className="cat-overlay" onClick={() => setCatOpen(false)} />
+              <aside className="cat-drawer">
+                <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}><h3 style={{ margin: 0 }}>Categories</h3><button className="btn small ghost" onClick={() => setCatOpen(false)}>✕</button></div>
+                <p className="muted" style={{ marginTop: 10 }}>Veg / Non-Veg</p>
+                <div className="row">
+                  {[{ k: 'all', label: 'All dishes' }, { k: 'veg', label: '🟢 Veg only' }, { k: 'nonveg', label: '🔴 Non-Veg only' }].map((o) => <button key={o.k} className={`btn small ${diet === o.k ? 'primary' : 'ghost'}`} onClick={() => setDiet(o.k)}>{o.label}</button>)}
+                </div>
+                <hr />
+                {['All', ...CATEGORIES].map((c) => (
+                  <button key={c} className={`cat-item ${cat === c ? 'active' : ''}`} onClick={() => { setCat(c); setCatOpen(false); }}>
+                    <span>{c}</span><span className="muted">{c === 'All' ? menu.filter((d) => d.available !== false).length : menu.filter((d) => d.category === c && d.available !== false).length}</span>
+                  </button>
+                ))}
+              </aside>
+            </>)}
+            </>)}
+            {custTab === 'cart' && (<div className="card savor-cart" id="bill" style={{ maxWidth: 640, margin: '0 auto' }}>
+              <h2>🛒 Your Cart {cartItems.length > 0 ? `· ${cartCount} items` : ''}</h2>
+              {cartItems.length === 0 ? <div style={{ textAlign: 'center', padding: '24px 0' }}><div style={{ fontSize: 48 }}>🛒</div><p><b>Your cart is empty</b></p><p className="muted">Add some delicious items!</p><button className="btn primary" onClick={() => setCustTab('menu')}>Browse Menu →</button></div> : cartItems.map((x) => (
                 <div key={x.dish.id} className="row" style={{ justifyContent: 'space-between' }}><span>{x.dish.name} × {x.qty}</span><span className="row"><button className="btn small ghost" onClick={() => setQty(x.dish.id, x.qty - 1)}>−</button><button className="btn small ghost" onClick={() => setQty(x.dish.id, x.qty + 1)}>+</button><span>{fmt(x.dish.price * x.qty)}</span><button className="btn small ghost" onClick={() => setQty(x.dish.id, 0)}>Remove</button></span></div>
               ))}
               <hr />
@@ -524,8 +553,7 @@ function HomeInner() {
               </div>
               <p className="muted">{payment === 'UPI' ? 'Pay at the table on the hotel UPI ID shown by the waiter, then place the order. The manager confirms receipt.' : 'Pay cash at the counter. The manager confirms receipt.'}</p>
               <button className="btn primary" onClick={placeOrder} disabled={!cartItems.length}>Place Order · {fmt(total)}</button>
-            </div></div>
-            </>)}
+            </div>)}
             {custTab === 'orders' && myOrder && (
               <div className="card">
                 <h2>Live Order Status</h2>
@@ -561,9 +589,9 @@ function HomeInner() {
               </>)}
             </div>)}
             {custTab === 'games' && <GameBox />}
-            {cartItems.length > 0 && (
-              <button className="cart-fab" onClick={() => document.getElementById('bill')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
-                🛒 Cart · {cartItems.reduce((s, x) => s + x.qty, 0)} items · {fmt(total)}
+            {cartItems.length > 0 && custTab !== 'cart' && (
+              <button className="cart-fab" onClick={() => setCustTab('cart')}>
+                🛒 Cart · {cartCount} items · {fmt(total)}
               </button>
             )}
             </div>

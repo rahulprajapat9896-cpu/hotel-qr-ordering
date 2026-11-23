@@ -84,6 +84,11 @@ label { display: block; font-size: 13px; font-weight: 800; }
 .savor-nav { display: flex; flex-direction: column; gap: 4px; }
 .savor-custgrid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; align-items: start; }
 .savor-cart { position: sticky; top: 16px; }
+/* Category slidebar (left drawer) on the customer menu */
+.cat-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 40; }
+.cat-drawer { position: fixed; top: 0; left: 0; bottom: 0; width: min(320px, 85vw); background: #fffdf7; z-index: 41; padding: 18px; overflow-y: auto; box-shadow: 8px 0 30px rgba(0,0,0,.25); }
+.cat-item { display: flex; justify-content: space-between; align-items: center; width: 100%; text-align: left; background: transparent; border: 0; border-bottom: 1px solid #efe6d4; padding: 12px 6px; font-weight: 700; font-size: 15px; color: #1c1917; }
+.cat-item.active { color: #e4572e; }
 .savor-hero-text h2 { font-size: 36px; line-height: 1.1; margin: 4px 0 6px; }
 .savor-hero-text h2 span { color: #c98a1b; }
 .savor-hero-text p { margin: 0 0 14px; }
