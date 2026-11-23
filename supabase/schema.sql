@@ -25,6 +25,7 @@ create table if not exists orders (
   table_no text not null check (table_no in ('T1','T2','T3','T4')),
   customer_name text not null default 'Guest',
   customer_phone text,
+  served_at timestamptz,
   payment_method text not null default 'UPI' check (payment_method in ('UPI','Cash')),
   payment_status text not null default 'pending' check (payment_status in ('pending','paid')),
   status text not null default 'placed'

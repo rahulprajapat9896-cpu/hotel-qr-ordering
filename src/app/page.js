@@ -93,7 +93,7 @@ function HomeInner() {
       if (o) {
         const byOrder = {};
         (oi || []).forEach((it) => { (byOrder[it.order_id] = byOrder[it.order_id] || []).push({ id: it.menu_item_id, name: it.name, price: Number(it.price), qty: it.qty }); });
-        setOrders(o.map((x) => ({ id: x.id, table: x.table_no, name: x.customer_name, mobile: x.customer_phone || '', paymentMethod: x.payment_method, paymentStatus: x.payment_status, status: x.status, total: Number(x.total), createdAt: x.created_at, items: byOrder[x.id] || [] })));
+        setOrders(o.map((x) => ({ id: x.id, table: x.table_no, name: x.customer_name, mobile: x.customer_phone || '', paymentMethod: x.payment_method, paymentStatus: x.payment_status, status: x.status, servedAt: x.served_at || null, total: Number(x.total), createdAt: x.created_at, items: byOrder[x.id] || [] })));
         firstLoadDone.current = true;
       }
       const { data: r } = await supabase.from('ratings').select('*');
@@ -101,19 +101,25 @@ function HomeInner() {
       const { data: cm } = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true });
       if (cm) {
         const mapped = cm.map((x) => ({ id: x.id, table: x.table_no, sender: x.sender, senderName: x.sender_name, text: x.message, readByManager: x.read_by_manager, readByCustomer: x.read_by_customer, createdAt: x.created_at }));
-        // Delete-after-seen: once a table's visit is complete (it has orders
-        // and none are active), drop the messages the reader has already
-        // seen, so the chat box refreshes for the next guest. Unseen
-        // messages stay until the manager/customer actually reads them.
-        const doneTables = new Set();
+        // Chat refresh: once a table's visit is complete (it has orders and
+        // none are active), clear its whole chat 2 minutes after the last
+        // order was served/rejected, so the next guest starts fresh.
+        // Orders served before served_at existed count as long finished.
+        const refreshTables = new Set();
         TABLES.forEach((t) => {
           const tOrders = (o || []).filter((x) => x.table_no === t);
-          if (tOrders.length && tOrders.every((x) => ['served', 'rejected'].includes(x.status))) doneTables.add(t);
+          if (!tOrders.length || !tOrders.every((x) => ['served', 'rejected'].includes(x.status))) return;
+          const times = tOrders.map((x) => x.served_at ? new Date(x.served_at).getTime() : 0);
+          const doneAt = times.some((v) => v === 0) ? 0 : Math.max(...times);
+          if (Date.now() - doneAt > 2 * 60 * 1000) refreshTables.add(t);
         });
-        const isSeen = (m) => m.sender === 'customer' ? m.readByManager : m.readByCustomer;
-        const seenIds = mapped.filter((m) => doneTables.has(m.table) && isSeen(m)).map((m) => m.id);
-        setMessages(mapped.filter((m) => !(doneTables.has(m.table) && isSeen(m))));
-        if (seenIds.length) supabase.from('chat_messages').delete().in('id', seenIds).then(() => {});
+        if (refreshTables.size) {
+          const dropIds = mapped.filter((m) => refreshTables.has(m.table)).map((m) => m.id);
+          setMessages(mapped.filter((m) => !refreshTables.has(m.table)));
+          if (dropIds.length) supabase.from('chat_messages').delete().in('id', dropIds).then(() => {});
+        } else {
+          setMessages(mapped);
+        }
       }
     } catch { /* offline / not configured yet — local fallback stays */ }
   }, []);
@@ -227,11 +233,14 @@ function HomeInner() {
   }
 
   async function updateOrder(id, patch) {
-    setOrders((os) => os.map((o) => String(o.id) === String(id) ? { ...o, ...patch } : o));
+    const servedAt = patch.status && ['served', 'rejected'].includes(patch.status) ? new Date().toISOString() : null;
+    const fullPatch = servedAt ? { ...patch, servedAt } : patch;
+    setOrders((os) => os.map((o) => String(o.id) === String(id) ? { ...o, ...fullPatch } : o));
     if (supabase && !String(id).startsWith('local-')) {
       const db = {};
       if (patch.status) db.status = patch.status;
       if (patch.paymentStatus) db.payment_status = patch.paymentStatus;
+      if (servedAt) db.served_at = servedAt;
       if (Object.keys(db).length) await supabase.from('orders').update(db).eq('id', id);
     }
   }
@@ -287,6 +296,14 @@ function HomeInner() {
   const mgrUnreadByTable = {};
   TABLES.forEach((t) => { mgrUnreadByTable[t] = messages.filter((m) => m.table === t && m.sender === 'customer' && !m.readByManager).length; });
   const mgrChatMessages = mgrChatTable ? messages.filter((m) => m.table === mgrChatTable) : [];
+  const mgrChatCustomer = useMemo(() => {
+    if (!mgrChatTable) return '';
+    const tOrders = orders.filter((o) => o.table === mgrChatTable).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const named = tOrders.find((o) => o.name && o.name !== 'Guest');
+    if (named) return named.name;
+    const lastMsg = [...messages].reverse().find((m) => m.table === mgrChatTable && m.sender === 'customer' && m.senderName);
+    return lastMsg ? lastMsg.senderName : 'Guest';
+  }, [mgrChatTable, orders, messages]);
   const activeTables = new Set(orders.filter((o) => !['served', 'rejected'].includes(o.status)).map((o) => o.table)).size;
   const mgrOrders = orders.filter((o) => {
     if (!mgrSearch.trim()) return true;
@@ -459,7 +476,7 @@ function HomeInner() {
             {custTab === 'chat' && (<div className="card">
               <h2>💬 Chat with Manager</h2>
               {!table ? (<p className="muted">Pehle apni table choose karo (Menu tab se), phir yahan manager se baat kar sakte ho.</p>) : (<>
-                <p className="muted">Table {table} · Manager yahin reply karega, live.</p>
+                <p className="muted">Table {table}{name ? ` · Chatting as ${name}` : ''} · Manager yahin reply karega, live.</p>
                 <div className="chat-box" ref={chatBoxRef}>
                   {tableMessages.length === 0 ? <p className="muted">Abhi tak koi message nahi — kuch poochna ho to neeche likho. 👇</p> : tableMessages.map((m) => (
                     <div key={m.id} className={`chat-msg ${m.sender === 'customer' ? 'mine' : 'theirs'}`}>
@@ -611,6 +628,7 @@ function HomeInner() {
                   </button>
                 ))}</div>
                 {!mgrChatTable ? (<p className="muted">Upar se ek table choose karo.</p>) : (<>
+                  <p style={{ margin: '0 0 10px' }}><b>Chatting with {mgrChatCustomer} · Table {mgrChatTable}</b></p>
                   <div className="chat-box" ref={chatBoxRef}>
                     {mgrChatMessages.length === 0 ? <p className="muted">Is table se abhi tak koi message nahi aaya.</p> : mgrChatMessages.map((m) => (
                       <div key={m.id} className={`chat-msg ${m.sender === 'manager' ? 'mine' : 'theirs'}`}>
