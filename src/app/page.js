@@ -69,6 +69,7 @@ function HomeInner() {
   const prevChatCount = useRef(0);
   const chatBoxRef = useRef(null);
   const firstLoadDone = useRef(false);
+  const servedSeenAt = useRef({}); // table -> client time (ms) its visit was first seen complete
 
   // --- Separate links: ?table=T1..T4 locks to Customer, ?view=manager/chef/waiter/customer locks to that page ---
   // A customer who scanned a table QR must never see the staff switcher.
@@ -88,12 +89,16 @@ function HomeInner() {
     if (['customer', 'manager', 'chef', 'waiter'].includes(v)) setView(v);
   }, [params, tableParam]);
 
+  // Each section loads independently: a failure in one (e.g. settings)
+  // must never stop the orders or the chat from loading.
   const fetchData = useCallback(async () => {
     if (!supabase) return;
+    let o = null;
     try {
       const { data: m } = await supabase.from('menu_items').select('*').order('id');
       if (m && m.length) setMenu(m.map((x) => ({ id: x.id, name: x.name, category: x.category, price: Number(x.price), veg: x.veg, img: x.image_url, desc: x.description || '', available: x.available !== false, topRated: x.top_rated, rating: x.rating || null })));
-      const { data: o } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+      const res = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+      o = res.data;
       const { data: oi } = await supabase.from('order_items').select('*');
       if (o) {
         const byOrder = {};
@@ -101,8 +106,12 @@ function HomeInner() {
         setOrders(o.map((x) => ({ id: x.id, table: x.table_no, name: x.customer_name, mobile: x.customer_phone || '', paymentMethod: x.payment_method, paymentStatus: x.payment_status, status: x.status, servedAt: x.served_at || null, total: Number(x.total), createdAt: x.created_at, items: byOrder[x.id] || [] })));
         firstLoadDone.current = true;
       }
+    } catch { /* core load failed — next poll retries */ }
+    try {
       const { data: r } = await supabase.from('ratings').select('*');
       if (r) setRatings(r.map((x) => ({ orderId: x.order_id, stars: x.stars, feedback: x.feedback })));
+    } catch { /* ratings failed — chat still loads below */ }
+    try {
       const { data: st } = await supabase.from('settings').select('*');
       if (st) {
         const row = st.find((x) => x.key === 'hotel_location');
@@ -110,23 +119,25 @@ function HomeInner() {
         try { next = row ? JSON.parse(row.value) : null; } catch (e) { next = null; }
         setHotelLoc((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
       }
+    } catch { /* settings failed — chat still loads below */ }
+    try {
       const { data: cm } = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true });
       if (cm) {
         const mapped = cm.map((x) => ({ id: x.id, table: x.table_no, sender: x.sender, senderName: x.sender_name, text: x.message, readByManager: x.read_by_manager, readByCustomer: x.read_by_customer, createdAt: x.created_at }));
         // Chat refresh: once a table's visit is complete (it has orders and
-        // none are active), clear its whole chat 2 minutes after the last
-        // order was served/rejected, so the next guest starts fresh.
-        // Orders served before served_at existed have no timestamp — ignore
-        // them instead of treating them as finished long ago, or the chat
-        // would clear the moment any newer order is served.
+        // none are active), clear its whole chat 2 minutes after the visit
+        // ended, so the next guest starts fresh. The 2 minutes are measured
+        // on THIS device's clock from the moment the visit was first seen
+        // complete — never from the database's served_at — so a clock
+        // difference between the device and the database can never clear
+        // the chat early.
         const refreshTables = new Set();
         TABLES.forEach((t) => {
           const tOrders = (o || []).filter((x) => x.table_no === t);
-          if (!tOrders.length || !tOrders.every((x) => ['served', 'rejected'].includes(x.status))) return;
-          const times = tOrders.map((x) => x.served_at ? new Date(x.served_at).getTime() : null).filter((v) => v !== null);
-          if (!times.length) return;
-          const doneAt = Math.max(...times);
-          if (Date.now() - doneAt > 2 * 60 * 1000) refreshTables.add(t);
+          const allDone = tOrders.length > 0 && tOrders.every((x) => ['served', 'rejected'].includes(x.status));
+          if (!allDone) { delete servedSeenAt.current[t]; return; }
+          if (!servedSeenAt.current[t]) servedSeenAt.current[t] = Date.now();
+          if (Date.now() - servedSeenAt.current[t] > 2 * 60 * 1000) refreshTables.add(t);
         });
         if (refreshTables.size) {
           const dropIds = mapped.filter((m) => refreshTables.has(m.table)).map((m) => m.id);
@@ -136,7 +147,7 @@ function HomeInner() {
           setMessages(mapped);
         }
       }
-    } catch { /* offline / not configured yet — local fallback stays */ }
+    } catch { /* chat load failed — next poll retries */ }
   }, []);
 
   useEffect(() => { fetchData(); const t = setInterval(fetchData, 3000); return () => clearInterval(t); }, [fetchData]);
@@ -261,7 +272,12 @@ function HomeInner() {
     const radius = Math.max(50, Math.min(1000, parseInt(locForm.radius || '150', 10) || 150));
     if (Number.isNaN(lat) || lat < -90 || lat > 90 || Number.isNaN(lng) || lng < -180 || lng > 180) { setNotice('Sahi latitude (-90 se 90) aur longitude (-180 se 180) bharo.'); return; }
     const value = { lat, lng, radius };
-    if (supabase) await supabase.from('settings').upsert({ key: 'hotel_location', value: JSON.stringify(value) });
+    if (supabase) {
+      const { error } = await supabase.from('settings').upsert({ key: 'hotel_location', value: JSON.stringify(value) });
+      if (error) { setNotice('Location save nahi hui — dobara try karo. (' + (error.message || 'save fail') + ')'); return; }
+      const { data: check } = await supabase.from('settings').select('value').eq('key', 'hotel_location').maybeSingle();
+      if (!check) { setNotice('Location save nahi hui — dobara try karo.'); return; }
+    }
     setHotelLoc(value); setNotice('Hotel location save ho gayi — QR protection ON hai.');
   }
   async function clearHotelLocation() {
