@@ -55,7 +55,13 @@ function HomeInner() {
   const [sideOpen, setSideOpen] = useState(false);
   const [newDish, setNewDish] = useState({ name: '', category: 'Starters', price: '', img: '' });
   const [soundOn, setSoundOn] = useState(true);
+  const [messages, setMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [mgrChatTable, setMgrChatTable] = useState('');
+  const [mgrChatInput, setMgrChatInput] = useState('');
   const prevIds = useRef({ all: new Set(), chef: new Set(), ready: new Set(), init: false });
+  const prevChatCount = useRef(0);
+  const chatBoxRef = useRef(null);
   const firstLoadDone = useRef(false);
 
   // --- Separate links: ?table=T1..T4 locks to Customer, ?view=manager/chef/waiter/customer locks to that page ---
@@ -91,6 +97,8 @@ function HomeInner() {
       }
       const { data: r } = await supabase.from('ratings').select('*');
       if (r) setRatings(r.map((x) => ({ orderId: x.order_id, stars: x.stars, feedback: x.feedback })));
+      const { data: cm } = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true });
+      if (cm) setMessages(cm.map((x) => ({ id: x.id, table: x.table_no, sender: x.sender, senderName: x.sender_name, text: x.message, readByManager: x.read_by_manager, readByCustomer: x.read_by_customer, createdAt: x.created_at })));
     } catch { /* offline / not configured yet — local fallback stays */ }
   }, []);
 
@@ -130,6 +138,37 @@ function HomeInner() {
     }
     prevIds.current = { all, chef, ready, init: true };
   }, [orders, view, soundOn]);
+
+  // Chat: a new customer message rings for the manager, like a new order.
+  useEffect(() => {
+    const count = messages.filter((m) => m.sender === 'customer').length;
+    if (!firstLoadDone.current) return;
+    if (prevChatCount.current && count > prevChatCount.current && view === 'manager' && soundOn) ringOrder();
+    prevChatCount.current = count;
+  }, [messages, view, soundOn]);
+
+  // Chat: keep the message list scrolled to the latest message.
+  useEffect(() => {
+    const el = chatBoxRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, custTab, mgrChatTable]);
+
+  // Chat: opening the chat marks the other side's messages as read.
+  useEffect(() => {
+    if (custTab !== 'chat' || !table) return;
+    const unread = messages.filter((m) => m.table === table && m.sender === 'manager' && !m.readByCustomer);
+    if (!unread.length) return;
+    setMessages((ms) => ms.map((m) => (m.table === table && m.sender === 'manager' ? { ...m, readByCustomer: true } : m)));
+    if (supabase) supabase.from('chat_messages').update({ read_by_customer: true }).eq('table_no', table).eq('sender', 'manager').eq('read_by_customer', false).then(() => {});
+  }, [custTab, messages, table]);
+
+  useEffect(() => {
+    if (view !== 'manager' || !mgrChatTable) return;
+    const unread = messages.filter((m) => m.table === mgrChatTable && m.sender === 'customer' && !m.readByManager);
+    if (!unread.length) return;
+    setMessages((ms) => ms.map((m) => (m.table === mgrChatTable && m.sender === 'customer' ? { ...m, readByManager: true } : m)));
+    if (supabase) supabase.from('chat_messages').update({ read_by_manager: true }).eq('table_no', mgrChatTable).eq('sender', 'customer').eq('read_by_manager', false).then(() => {});
+  }, [view, messages, mgrChatTable]);
 
   const highlights = useMemo(() => {
     const rated = [...menu].filter((d) => d.available !== false);
@@ -184,6 +223,33 @@ function HomeInner() {
     setRatings((r) => [...r, { orderId, stars, feedback }]);
   }
 
+  // --- Customer <-> Manager chat (one thread per table) ---
+  function appendChatMsg(row) {
+    setMessages((ms) => ms.some((x) => String(x.id) === String(row.id)) ? ms : [...ms, row]);
+  }
+
+  async function sendChat() {
+    const text = chatInput.trim();
+    if (!text || !table) return;
+    setChatInput('');
+    if (supabase) {
+      const { data } = await supabase.from('chat_messages').insert({ table_no: table, sender: 'customer', sender_name: name || 'Guest', message: text, read_by_customer: true }).select().single();
+      if (data) { appendChatMsg({ id: data.id, table: data.table_no, sender: data.sender, senderName: data.sender_name, text: data.message, readByManager: data.read_by_manager, readByCustomer: data.read_by_customer, createdAt: data.created_at }); return; }
+    }
+    appendChatMsg({ id: `local-${Date.now()}`, table, sender: 'customer', senderName: name || 'Guest', text, readByManager: false, readByCustomer: true, createdAt: new Date().toISOString() });
+  }
+
+  async function sendManagerChat() {
+    const text = mgrChatInput.trim();
+    if (!text || !mgrChatTable) return;
+    setMgrChatInput('');
+    if (supabase) {
+      const { data } = await supabase.from('chat_messages').insert({ table_no: mgrChatTable, sender: 'manager', sender_name: 'Manager', message: text, read_by_manager: true }).select().single();
+      if (data) { appendChatMsg({ id: data.id, table: data.table_no, sender: data.sender, senderName: data.sender_name, text: data.message, readByManager: data.read_by_manager, readByCustomer: data.read_by_customer, createdAt: data.created_at }); return; }
+    }
+    appendChatMsg({ id: `local-${Date.now()}`, table: mgrChatTable, sender: 'manager', senderName: 'Manager', text, readByManager: true, readByCustomer: false, createdAt: new Date().toISOString() });
+  }
+
   const myOrder = orders.find((o) => String(o.id) === String(myOrderId));
   const avgRating = ratings.length ? (ratings.reduce((s, r) => s + r.stars, 0) / ratings.length).toFixed(1) : '—';
   // --- Daily stats: only today's orders (local date), so the numbers reset
@@ -196,6 +262,13 @@ function HomeInner() {
   const mgrGreet = mgrHour < 12 ? 'Good morning' : mgrHour < 17 ? 'Good afternoon' : 'Good evening';
   const mgrDate = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   const pendingCount = orders.filter((o) => o.status === 'placed').length;
+  // --- Customer <-> Manager chat: one thread per table ---
+  const tableMessages = table ? messages.filter((m) => m.table === table) : [];
+  const custUnread = tableMessages.filter((m) => m.sender === 'manager' && !m.readByCustomer).length;
+  const mgrUnread = messages.filter((m) => m.sender === 'customer' && !m.readByManager).length;
+  const mgrUnreadByTable = {};
+  TABLES.forEach((t) => { mgrUnreadByTable[t] = messages.filter((m) => m.table === t && m.sender === 'customer' && !m.readByManager).length; });
+  const mgrChatMessages = mgrChatTable ? messages.filter((m) => m.table === mgrChatTable) : [];
   const activeTables = new Set(orders.filter((o) => !['served', 'rejected'].includes(o.status)).map((o) => o.table)).size;
   const mgrOrders = orders.filter((o) => {
     if (!mgrSearch.trim()) return true;
@@ -226,7 +299,7 @@ function HomeInner() {
   const histDateLabel = new Date(`${histDate}T12:00:00`).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   // --- Separate pages per sidebar button (?tab=...) ---
   const tabParam = (params.get('tab') || '').toLowerCase();
-  const mgrTab = ['dashboard', 'orders', 'menu', 'qr', 'customers', 'history', 'reports', 'settings'].includes(tabParam) ? tabParam : 'dashboard';
+  const mgrTab = ['dashboard', 'orders', 'chat', 'menu', 'qr', 'customers', 'history', 'reports', 'settings'].includes(tabParam) ? tabParam : 'dashboard';
   const chefTab = ['board', 'new', 'fire', 'ready'].includes(tabParam) ? tabParam : 'board';
   const waiterTab = ['board', 'ready', 'coming', 'served'].includes(tabParam) ? tabParam : 'board';
   // --- Visits: one guest sitting = one visit. A new visit starts on a table
@@ -266,6 +339,7 @@ function HomeInner() {
             <button className={custTab === 'menu' ? 'active' : ''} onClick={() => setCustTab('menu')}>🍴 Menu</button>
             <button className={custTab === 'orders' ? 'active' : ''} onClick={() => setCustTab('orders')}>🕐 My Orders</button>
             <button className={custTab === 'info' ? 'active' : ''} onClick={() => setCustTab('info')}>🪑 Table Info</button>
+            <button className={custTab === 'chat' ? 'active' : ''} onClick={() => setCustTab('chat')}>💬 Chat {custUnread > 0 && <span className="savor-badge">{custUnread}</span>}</button>
           </nav>
         )}
       </header>
@@ -359,6 +433,27 @@ function HomeInner() {
             )}
             {custTab === 'orders' && !myOrder && (<div className="card"><h2>My Orders</h2><p className="muted">Abhi tak koi order nahi hai — menu se dish add karo aur order place karo.</p></div>)}
             {custTab === 'info' && (<div className="card"><h2>🪑 Table Info</h2><p><b>Table:</b> {table || 'Not selected'}</p><p><b>Status:</b> {table ? 'Online' : '—'}</p><p className="muted">Is table ka QR scan karke ye page khula hai. Order karne ke liye Menu tab pe jao.</p>{table && <button className="btn small ghost" onClick={() => setTable('')}>Change table</button>}</div>)}
+            {custTab === 'chat' && (<div className="card">
+              <h2>💬 Chat with Manager</h2>
+              {!table ? (<p className="muted">Pehle apni table choose karo (Menu tab se), phir yahan manager se baat kar sakte ho.</p>) : (<>
+                <p className="muted">Table {table} · Manager yahin reply karega, live.</p>
+                <div className="chat-box" ref={chatBoxRef}>
+                  {tableMessages.length === 0 ? <p className="muted">Abhi tak koi message nahi — kuch poochna ho to neeche likho. 👇</p> : tableMessages.map((m) => (
+                    <div key={m.id} className={`chat-msg ${m.sender === 'customer' ? 'mine' : 'theirs'}`}>
+                      <div className="chat-bubble">
+                        {m.sender === 'manager' && <span className="chat-who">Manager</span>}
+                        {m.text}
+                        <span className="chat-time">{new Date(m.createdAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="row">
+                  <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Manager ko message likho..." onKeyDown={(e) => { if (e.key === 'Enter') sendChat(); }} style={{ flex: 1, margin: 0 }} />
+                  <button className="btn primary" onClick={sendChat} disabled={!chatInput.trim()}>Send</button>
+                </div>
+              </>)}
+            </div>)}
             {cartItems.length > 0 && (
               <button className="cart-fab" onClick={() => document.getElementById('bill')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
                 🛒 Cart · {cartItems.reduce((s, x) => s + x.qty, 0)} items · {fmt(total)}
@@ -375,6 +470,7 @@ function HomeInner() {
               <nav className="savor-nav">
                 <a className={mgrTab === 'dashboard' ? 'active' : ''} href="/?view=manager&tab=dashboard">▦ Dashboard</a>
                 <a className={mgrTab === 'orders' ? 'active' : ''} href="/?view=manager&tab=orders">⚡ Live Orders {pendingCount > 0 && <span className="savor-badge">{pendingCount}</span>}</a>
+                <a className={mgrTab === 'chat' ? 'active' : ''} href="/?view=manager&tab=chat">💬 Customer Chat {mgrUnread > 0 && <span className="savor-badge">{mgrUnread}</span>}</a>
                 <a className={mgrTab === 'menu' ? 'active' : ''} href="/?view=manager&tab=menu">🍴 Menu</a>
                 <a className={mgrTab === 'qr' ? 'active' : ''} href="/?view=manager&tab=qr">⊞ Tables &amp; QR</a>
                 <a className={mgrTab === 'customers' ? 'active' : ''} href="/?view=manager&tab=customers">👥 Customers</a>
@@ -479,6 +575,32 @@ function HomeInner() {
                     ))}</tbody>
                   </table></div>
                 )}
+              </div>)}
+              {mgrTab === 'chat' && (<div className="card savor-card">
+                <h2>💬 Customer Chat</h2>
+                <p className="muted">Har table ki alag chat hai. Customer ka message aate hi yahan bajega (ring) aur badge dikhega. Table choose karo, phir reply karo.</p>
+                <div className="row" style={{ marginBottom: 12 }}>{TABLES.map((t) => (
+                  <button key={t} className={`btn small ${mgrChatTable === t ? 'primary' : 'ghost'}`} onClick={() => setMgrChatTable(t)}>
+                    Table {t} {mgrUnreadByTable[t] > 0 && <span className="savor-badge">{mgrUnreadByTable[t]}</span>}
+                  </button>
+                ))}</div>
+                {!mgrChatTable ? (<p className="muted">Upar se ek table choose karo.</p>) : (<>
+                  <div className="chat-box" ref={chatBoxRef}>
+                    {mgrChatMessages.length === 0 ? <p className="muted">Is table se abhi tak koi message nahi aaya.</p> : mgrChatMessages.map((m) => (
+                      <div key={m.id} className={`chat-msg ${m.sender === 'manager' ? 'mine' : 'theirs'}`}>
+                        <div className="chat-bubble">
+                          {m.sender === 'customer' && <span className="chat-who">{m.senderName || 'Guest'} · Table {m.table}</span>}
+                          {m.text}
+                          <span className="chat-time">{new Date(m.createdAt).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="row">
+                    <input type="text" value={mgrChatInput} onChange={(e) => setMgrChatInput(e.target.value)} placeholder={`Table ${mgrChatTable} ko reply likho...`} onKeyDown={(e) => { if (e.key === 'Enter') sendManagerChat(); }} style={{ flex: 1, margin: 0 }} />
+                    <button className="btn primary" onClick={sendManagerChat} disabled={!mgrChatInput.trim()}>Send</button>
+                  </div>
+                </>)}
               </div>)}
               {mgrTab === 'qr' && (<div className="card savor-card" id="savor-qr"><h2>Table QR Codes</h2><p className="muted">Print these from the <a href="/qr">printable QR page</a>. Each QR opens the customer page for that table.</p>
                 <div className="qrgrid">{TABLES.map((t) => <div key={t}><img src={`/qr/table-${t.toLowerCase()}-qr.png`} alt={`QR for table ${t}`} /><p style={{ textAlign: 'center' }}><b>{t}</b><br /><span className="muted">{siteUrl}/?table={t}</span></p></div>)}</div>
