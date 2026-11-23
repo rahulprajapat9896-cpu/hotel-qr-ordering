@@ -340,6 +340,7 @@ function HomeInner() {
             <button className={custTab === 'orders' ? 'active' : ''} onClick={() => setCustTab('orders')}>🕐 My Orders</button>
             <button className={custTab === 'info' ? 'active' : ''} onClick={() => setCustTab('info')}>🪑 Table Info</button>
             <button className={custTab === 'chat' ? 'active' : ''} onClick={() => setCustTab('chat')}>💬 Chat {custUnread > 0 && <span className="savor-badge">{custUnread}</span>}</button>
+            <button className={custTab === 'games' ? 'active' : ''} onClick={() => setCustTab('games')}>🎮 Games</button>
           </nav>
         )}
       </header>
@@ -427,6 +428,7 @@ function HomeInner() {
                 <p><b>Order {String(myOrder.id).slice(0, 8)}</b> · Table {myOrder.table} · {fmt(myOrder.total)} · {myOrder.paymentMethod} ({myOrder.paymentStatus})</p>
                 <div className="steps">{STEPS.map((s, i) => { const idx = STEPS.indexOf(myOrder.status); return <span key={s} className={i < idx ? 'done' : i === idx ? 'now' : ''}>{STEP_LABELS[s]}</span>; })}</div>
                 <p className="muted">Current status: <b>{STATUS_LABEL[myOrder.status] || myOrder.status}</b></p>
+                {myOrder.status !== 'served' && <div className="row" style={{ marginTop: 10 }}><span>⏳ Order ready hone tak time hai?</span><button className="btn gold small" onClick={() => setCustTab('games')}>🎮 Game khelo</button></div>}
                 {myOrder.status === 'served' && <ReceiptBox order={myOrder} />}
                 {myOrder.status === 'served' && <RatingBox orderId={myOrder.id} onSubmit={submitRating} done={ratings.some((r) => String(r.orderId) === String(myOrder.id))} />}
               </div>
@@ -454,6 +456,7 @@ function HomeInner() {
                 </div>
               </>)}
             </div>)}
+            {custTab === 'games' && <GameBox />}
             {cartItems.length > 0 && (
               <button className="cart-fab" onClick={() => document.getElementById('bill')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
                 🛒 Cart · {cartItems.reduce((s, x) => s + x.qty, 0)} items · {fmt(total)}
@@ -854,6 +857,143 @@ function WaiterBoard({ orders, updateOrder, tab }) {
       </>)}
       {show('coming') && (<div className="card"><h3>Coming up</h3>{coming.length === 0 ? <p className="muted">Nothing cooking.</p> : coming.map((o) => <p key={o.id}><b>{o.table}</b> — {o.items.map((it) => `${it.name} × ${it.qty}`).join(', ')} · {STATUS_LABEL[o.status]}</p>)}</div>)}
       {show('served') && (<div className="card"><h3>Recently served</h3>{served.length === 0 ? <p className="muted">—</p> : served.slice(0, 10).map((o) => <p key={o.id}><b>{o.table}</b> — {o.items.map((it) => `${it.name} × ${it.qty}`).join(', ')} · {fmt(o.total)}</p>)}</div>)}
+    </div>
+  );
+}
+
+// --- Catch the Dish: a quick waiting game for customers. Food falls from the
+// top, catch it in the plate. 45 seconds, best score saved on this phone. ---
+const GAME_FOODS = ['🍕', '🍔', '🍟', '🌮', '🍩', '🍪', '🍦', '🍿', '🥪', '🌯'];
+const GAME_TIME = 45;
+
+function GameBox() {
+  const canvasRef = useRef(null);
+  const [score, setScore] = useState(0);
+  const [best, setBest] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(GAME_TIME);
+  const [running, setRunning] = useState(false);
+  const [over, setOver] = useState(false);
+  const st = useRef({ x: 0.5, items: [], time: GAME_TIME, spawnIn: 0, shown: GAME_TIME, score: 0, over: false });
+
+  useEffect(() => {
+    try { setBest(Number(window.localStorage.getItem('rahul-game-best') || 0)); } catch {}
+  }, []);
+
+  function startGame() {
+    st.current = { x: 0.5, items: [], time: GAME_TIME, spawnIn: 0, shown: GAME_TIME, score: 0, over: false };
+    setScore(0); setTimeLeft(GAME_TIME); setOver(false); setRunning(true);
+  }
+
+  function endGame() {
+    const sc = st.current.score;
+    setRunning(false); setOver(true);
+    if (sc > best) {
+      setBest(sc);
+      try { window.localStorage.setItem('rahul-game-best', String(sc)); } catch {}
+    }
+  }
+
+  // Idle scene: plate + a few dishes before the game starts.
+  useEffect(() => {
+    if (running) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.textAlign = 'center';
+    ctx.font = '30px serif';
+    ctx.fillText('🍕', canvas.width * 0.3, 90);
+    ctx.fillText('🍔', canvas.width * 0.7, 150);
+    ctx.fillText('🌶️', canvas.width * 0.5, 210);
+    ctx.font = '44px serif';
+    ctx.fillText('🍽️', canvas.width / 2, canvas.height - 16);
+  }, [running]);
+
+  // Keyboard controls.
+  useEffect(() => {
+    if (!running) return;
+    const h = (e) => {
+      if (e.key === 'ArrowLeft') st.current.x = Math.max(0.05, st.current.x - 0.07);
+      if (e.key === 'ArrowRight') st.current.x = Math.min(0.95, st.current.x + 0.07);
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [running]);
+
+  // Main game loop.
+  useEffect(() => {
+    if (!running) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    let raf; let last = performance.now();
+    const loop = (now) => {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const g = st.current;
+      if (g.over) return;
+      g.time -= dt;
+      const shown = Math.max(0, Math.ceil(g.time));
+      if (shown !== g.shown) { g.shown = shown; setTimeLeft(shown); }
+      if (g.time <= 0) { g.over = true; endGame(); return; }
+      g.spawnIn -= dt;
+      const elapsed = GAME_TIME - g.time;
+      if (g.spawnIn <= 0 && g.items.length < 9) {
+        const r = Math.random();
+        const kind = r < 0.12 ? 'chilli' : r < 0.24 ? 'rotten' : 'food';
+        g.items.push({
+          x: 0.06 + Math.random() * 0.88,
+          y: -20,
+          vy: 130 + Math.random() * 90 + elapsed * 3,
+          kind,
+          emoji: kind === 'chilli' ? '🌶️' : kind === 'rotten' ? '🤢' : GAME_FOODS[Math.floor(Math.random() * GAME_FOODS.length)],
+          pts: kind === 'chilli' ? 25 : kind === 'rotten' ? -10 : 10,
+        });
+        g.spawnIn = Math.max(0.35, 0.85 - elapsed * 0.008);
+      }
+      const basketY = H - 46;
+      g.items = g.items.filter((it) => {
+        it.y += it.vy * dt;
+        if (it.y >= basketY - 10 && it.y <= basketY + 26 && Math.abs(it.x - g.x) < 0.1) {
+          g.score += it.pts;
+          setScore(g.score);
+          return false;
+        }
+        return it.y < H + 20;
+      });
+      ctx.clearRect(0, 0, W, H);
+      ctx.font = '30px serif';
+      ctx.textAlign = 'center';
+      g.items.forEach((it) => ctx.fillText(it.emoji, it.x * W, it.y));
+      ctx.font = '44px serif';
+      ctx.fillText('🍽️', g.x * W, basketY + 30);
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [running]);
+
+  function onPointer(e) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width;
+    st.current.x = Math.max(0.05, Math.min(0.95, px));
+  }
+
+  return (
+    <div className="card">
+      <h2>🎮 Catch the Dish!</h2>
+      <p className="muted">Order ready hone tak khelo — girta hua khana plate me pakdo. 🍕 +10 · 🌶️ +25 · 🤢 -10 · 45 seconds</p>
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <span><b>Score: {score}</b></span>
+        <span className="muted">Best: {best}</span>
+        <span><b>⏱ {timeLeft}s</b></span>
+      </div>
+      <canvas ref={canvasRef} className="game-canvas" width={360} height={440} onPointerDown={onPointer} onPointerMove={(e) => { if (running) onPointer(e); }} />
+      {!running && !over && <button className="btn primary" onClick={startGame} style={{ width: '100%', marginTop: 12 }}>▶ Start Game</button>}
+      {over && (<div style={{ marginTop: 12 }}><p><b>Time up!</b> Tumhara score: {score}{score >= best && score > 0 ? ' — New best! 🎉' : ''}</p><button className="btn primary" onClick={startGame} style={{ width: '100%' }}>↻ Play Again</button></div>)}
+      <p className="muted">Plate hilane ke liye screen par ungli ghumao, mouse drag karo, ya ← → keys dabao.</p>
     </div>
   );
 }
