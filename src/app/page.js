@@ -43,6 +43,7 @@ function HomeInner() {
   const [ratings, setRatings] = useState([]);
   const [cart, setCart] = useState({}); // dishId -> qty
   const [name, setName] = useState('');
+  const [mobile, setMobile] = useState('');
   const [payment, setPayment] = useState('UPI');
   const [myOrderId, setMyOrderId] = useState(null);
   const [slide, setSlide] = useState(0);
@@ -92,7 +93,7 @@ function HomeInner() {
       if (o) {
         const byOrder = {};
         (oi || []).forEach((it) => { (byOrder[it.order_id] = byOrder[it.order_id] || []).push({ id: it.menu_item_id, name: it.name, price: Number(it.price), qty: it.qty }); });
-        setOrders(o.map((x) => ({ id: x.id, table: x.table_no, name: x.customer_name, paymentMethod: x.payment_method, paymentStatus: x.payment_status, status: x.status, total: Number(x.total), createdAt: x.created_at, items: byOrder[x.id] || [] })));
+        setOrders(o.map((x) => ({ id: x.id, table: x.table_no, name: x.customer_name, mobile: x.customer_phone || '', paymentMethod: x.payment_method, paymentStatus: x.payment_status, status: x.status, total: Number(x.total), createdAt: x.created_at, items: byOrder[x.id] || [] })));
         firstLoadDone.current = true;
       }
       const { data: r } = await supabase.from('ratings').select('*');
@@ -208,10 +209,12 @@ function HomeInner() {
   async function placeOrder() {
     if (!table) { setNotice('Please choose your table first (T1–T4).'); return; }
     if (!cartItems.length) { setNotice('Your cart is empty — add a dish first.'); return; }
+    if (!name.trim()) { setNotice('Please enter your name to place the order.'); return; }
+    if (!/^[6-9]\d{9}$/.test(mobile.trim())) { setNotice('Please enter a valid 10-digit mobile number.'); return; }
     const items = cartItems.map((x) => ({ id: x.dish.id, name: x.dish.name, price: x.dish.price, qty: x.qty }));
-    const base = { table, name: name || 'Guest', paymentMethod: payment, paymentStatus: payment === 'Cash' ? 'pending' : 'pending', status: 'placed', total, createdAt: new Date().toISOString(), items };
+    const base = { table, name: name.trim(), mobile: mobile.trim(), paymentMethod: payment, paymentStatus: payment === 'Cash' ? 'pending' : 'pending', status: 'placed', total, createdAt: new Date().toISOString(), items };
     if (supabase) {
-      const { data, error } = await supabase.from('orders').insert({ table_no: table, customer_name: base.name, payment_method: payment, payment_status: 'pending', status: 'placed', total }).select().single();
+      const { data, error } = await supabase.from('orders').insert({ table_no: table, customer_name: base.name, customer_phone: base.mobile, payment_method: payment, payment_status: 'pending', status: 'placed', total }).select().single();
       if (!error && data) {
         await supabase.from('order_items').insert(items.map((it) => ({ order_id: data.id, menu_item_id: it.id, name: it.name, price: it.price, qty: it.qty })));
         setMyOrderId(data.id); setOrders((o) => [{ ...base, id: data.id }, ...o]);
@@ -328,10 +331,11 @@ function HomeInner() {
       let v = byTable[o.table];
       const closed = v && v.orders.every((x) => ['served', 'rejected'].includes(x.status));
       if (!v || closed) {
-        v = { key: `${o.table}-${all.filter((x) => x.table === o.table).length + 1}`, table: o.table, visitNo: all.filter((x) => x.table === o.table).length + 1, name: o.name || 'Guest', orders: [], first: o.createdAt, last: o.createdAt };
+        v = { key: `${o.table}-${all.filter((x) => x.table === o.table).length + 1}`, table: o.table, visitNo: all.filter((x) => x.table === o.table).length + 1, name: o.name || 'Guest', mobile: o.mobile || '', orders: [], first: o.createdAt, last: o.createdAt };
         all.push(v); byTable[o.table] = v;
       }
       if (o.name && o.name !== 'Guest') v.name = o.name;
+      if (o.mobile) v.mobile = o.mobile;
       v.orders.push(o);
       v.last = o.createdAt;
     });
@@ -427,8 +431,10 @@ function HomeInner() {
               <div className="row" style={{ justifyContent: 'space-between' }}><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
               <div className="row" style={{ justifyContent: 'space-between' }}><span>GST (5%)</span><span>{fmt(gst)}</span></div>
               <div className="row" style={{ justifyContent: 'space-between' }}><b>Total</b><b>{fmt(total)}</b></div>
-              <label>Your name</label>
+              <label>Your name *</label>
               <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Guest name" />
+              <label>Mobile number *</label>
+              <input type="tel" value={mobile} onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="10-digit mobile number" inputMode="numeric" />
               <label>Payment</label>
               <div className="row">
                 {['UPI', 'Cash'].map((p) => <button key={p} className={`btn small ${payment === p ? 'primary' : 'ghost'}`} onClick={() => setPayment(p)}>{p}</button>)}
@@ -525,10 +531,11 @@ function HomeInner() {
                   <div className="row" style={{ justifyContent: 'space-between' }}><h2>⚡ Live Orders</h2><span className="muted">Avg rating {avgRating} / 5</span></div>
                   {mgrOrders.length === 0 ? <p className="muted">No orders yet.</p> : (
                     <div className="savor-tablewrap"><table className="savor-table">
-                      <thead><tr><th>Order ID</th><th>Table</th><th>Items</th><th>Total</th><th>Status</th><th>Time</th><th>Action</th></tr></thead>
+                      <thead><tr><th>Order ID</th><th>Customer</th><th>Table</th><th>Items</th><th>Total</th><th>Status</th><th>Time</th><th>Action</th></tr></thead>
                       <tbody>{mgrOrders.map((o) => (
                         <tr key={o.id}>
                           <td><b>#{String(o.id).slice(0, 4)}</b></td>
+                          <td><b>{o.name}</b><br /><span className="muted">{o.mobile || '—'}</span></td>
                           <td>{o.table}</td>
                           <td>{o.items.map((it) => `${it.name} × ${it.qty}`).join(', ') || '—'}</td>
                           <td><b>{fmt(o.total)}</b></td>
@@ -579,10 +586,11 @@ function HomeInner() {
                 </div>
                 {histOrders.length === 0 ? <p className="muted">Is date ko koi order nahi hai.</p> : (
                   <div className="savor-tablewrap"><table className="savor-table">
-                    <thead><tr><th>Order ID</th><th>Table</th><th>Items</th><th>Total</th><th>Status</th><th>Time</th><th>Payment</th></tr></thead>
+                    <thead><tr><th>Order ID</th><th>Customer</th><th>Table</th><th>Items</th><th>Total</th><th>Status</th><th>Time</th><th>Payment</th></tr></thead>
                     <tbody>{histOrders.map((o) => (
                       <tr key={o.id}>
                         <td><b>#{String(o.id).slice(0, 4)}</b></td>
+                        <td><b>{o.name}</b><br /><span className="muted">{o.mobile || '—'}</span></td>
                         <td>{o.table}</td>
                         <td>{o.items.map((it) => `${it.name} × ${it.qty}`).join(', ') || '—'}</td>
                         <td><b>{fmt(o.total)}</b></td>
@@ -635,7 +643,7 @@ function HomeInner() {
                       const active = v.orders.some((x) => !['served', 'rejected'].includes(x.status));
                       return (
                       <tr key={v.key}>
-                        <td><b>{v.name}</b></td>
+                        <td><b>{v.name}</b><br /><span className="muted">{v.mobile || '—'}</span></td>
                         <td>{v.table}</td>
                         <td>Visit {v.visitNo}</td>
                         <td>{v.orders.length}</td>
