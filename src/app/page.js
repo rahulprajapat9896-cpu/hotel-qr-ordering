@@ -70,6 +70,7 @@ function HomeInner() {
   const chatBoxRef = useRef(null);
   const firstLoadDone = useRef(false);
   const servedSeenAt = useRef({}); // table -> client time (ms) its visit was first seen complete
+  const fetchSeq = useRef(0); // latest fetchData call wins; older completions are discarded
 
   // --- Separate links: ?table=T1..T4 locks to Customer, ?view=manager/chef/waiter/customer locks to that page ---
   // A customer who scanned a table QR must never see the staff switcher.
@@ -89,65 +90,70 @@ function HomeInner() {
     if (['customer', 'manager', 'chef', 'waiter'].includes(v)) setView(v);
   }, [params, tableParam]);
 
-  // Each section loads independently: a failure in one (e.g. settings)
-  // must never stop the orders or the chat from loading.
+  // All six queries run IN PARALLEL and only the latest poll's result
+  // is applied. Before this, the six queries ran one after another
+  // (~1s each, so a whole load took ~6s), and polls overlapped and
+  // finished out of order — an older, slower completion could
+  // overwrite fresh data with stale data. That stale data is what
+  // made the manager page look empty, hid the customer messages,
+  // cleared the chat early, and left the geofence location unloaded.
   const fetchData = useCallback(async () => {
     if (!supabase) return;
-    let o = null;
-    try {
-      const { data: m } = await supabase.from('menu_items').select('*').order('id');
-      if (m && m.length) setMenu(m.map((x) => ({ id: x.id, name: x.name, category: x.category, price: Number(x.price), veg: x.veg, img: x.image_url, desc: x.description || '', available: x.available !== false, topRated: x.top_rated, rating: x.rating || null })));
-      const res = await supabase.from('orders').select('*').order('created_at', { ascending: false });
-      o = res.data;
-      const { data: oi } = await supabase.from('order_items').select('*');
-      if (o) {
-        const byOrder = {};
-        (oi || []).forEach((it) => { (byOrder[it.order_id] = byOrder[it.order_id] || []).push({ id: it.menu_item_id, name: it.name, price: Number(it.price), qty: it.qty }); });
-        setOrders(o.map((x) => ({ id: x.id, table: x.table_no, name: x.customer_name, mobile: x.customer_phone || '', paymentMethod: x.payment_method, paymentStatus: x.payment_status, status: x.status, servedAt: x.served_at || null, total: Number(x.total), createdAt: x.created_at, items: byOrder[x.id] || [] })));
-        firstLoadDone.current = true;
+    const mySeq = ++fetchSeq.current;
+    const [mRes, oRes, oiRes, rRes, stRes, cmRes] = await Promise.allSettled([
+      supabase.from('menu_items').select('*').order('id'),
+      supabase.from('orders').select('*').order('created_at', { ascending: false }),
+      supabase.from('order_items').select('*'),
+      supabase.from('ratings').select('*'),
+      supabase.from('settings').select('*'),
+      supabase.from('chat_messages').select('*').order('created_at', { ascending: true }),
+    ]);
+    if (mySeq !== fetchSeq.current) return; // a newer poll started — this result is stale, discard it
+    const m = mRes.status === 'fulfilled' ? mRes.value.data : null;
+    const o = oRes.status === 'fulfilled' ? oRes.value.data : null;
+    const oi = oiRes.status === 'fulfilled' ? oiRes.value.data : null;
+    const r = rRes.status === 'fulfilled' ? rRes.value.data : null;
+    const st = stRes.status === 'fulfilled' ? stRes.value.data : null;
+    const cm = cmRes.status === 'fulfilled' ? cmRes.value.data : null;
+    if (m && m.length) setMenu(m.map((x) => ({ id: x.id, name: x.name, category: x.category, price: Number(x.price), veg: x.veg, img: x.image_url, desc: x.description || '', available: x.available !== false, topRated: x.top_rated, rating: x.rating || null })));
+    if (o) {
+      const byOrder = {};
+      (oi || []).forEach((it) => { (byOrder[it.order_id] = byOrder[it.order_id] || []).push({ id: it.menu_item_id, name: it.name, price: Number(it.price), qty: it.qty }); });
+      setOrders(o.map((x) => ({ id: x.id, table: x.table_no, name: x.customer_name, mobile: x.customer_phone || '', paymentMethod: x.payment_method, paymentStatus: x.payment_status, status: x.status, servedAt: x.served_at || null, total: Number(x.total), createdAt: x.created_at, items: byOrder[x.id] || [] })));
+      firstLoadDone.current = true;
+    }
+    if (r) setRatings(r.map((x) => ({ orderId: x.order_id, stars: x.stars, feedback: x.feedback })));
+    if (st) {
+      const row = st.find((x) => x.key === 'hotel_location');
+      let next = null;
+      try { next = row ? JSON.parse(row.value) : null; } catch (e) { next = null; }
+      setHotelLoc((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+    }
+    if (cm) {
+      const mapped = cm.map((x) => ({ id: x.id, table: x.table_no, sender: x.sender, senderName: x.sender_name, text: x.message, readByManager: x.read_by_manager, readByCustomer: x.read_by_customer, createdAt: x.created_at }));
+      // Chat refresh: once a table's visit is complete (it has orders and
+      // none are active), clear its whole chat 2 minutes after the visit
+      // ended, so the next guest starts fresh. The 2 minutes are measured
+      // on THIS device's clock from the moment the visit was first seen
+      // complete — never from the database's served_at — so a clock
+      // difference between the device and the database can never clear
+      // the chat early.
+      const refreshTables = new Set();
+      TABLES.forEach((t) => {
+        const tOrders = (o || []).filter((x) => x.table_no === t);
+        const allDone = tOrders.length > 0 && tOrders.every((x) => ['served', 'rejected'].includes(x.status));
+        if (!allDone) { delete servedSeenAt.current[t]; return; }
+        if (!servedSeenAt.current[t]) servedSeenAt.current[t] = Date.now();
+        if (Date.now() - servedSeenAt.current[t] > 2 * 60 * 1000) refreshTables.add(t);
+      });
+      if (refreshTables.size) {
+        const dropIds = mapped.filter((m) => refreshTables.has(m.table)).map((m) => m.id);
+        setMessages(mapped.filter((m) => !refreshTables.has(m.table)));
+        if (dropIds.length) supabase.from('chat_messages').delete().in('id', dropIds).then(() => {});
+      } else {
+        setMessages(mapped);
       }
-    } catch { /* core load failed — next poll retries */ }
-    try {
-      const { data: r } = await supabase.from('ratings').select('*');
-      if (r) setRatings(r.map((x) => ({ orderId: x.order_id, stars: x.stars, feedback: x.feedback })));
-    } catch { /* ratings failed — chat still loads below */ }
-    try {
-      const { data: st } = await supabase.from('settings').select('*');
-      if (st) {
-        const row = st.find((x) => x.key === 'hotel_location');
-        let next = null;
-        try { next = row ? JSON.parse(row.value) : null; } catch (e) { next = null; }
-        setHotelLoc((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
-      }
-    } catch { /* settings failed — chat still loads below */ }
-    try {
-      const { data: cm } = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true });
-      if (cm) {
-        const mapped = cm.map((x) => ({ id: x.id, table: x.table_no, sender: x.sender, senderName: x.sender_name, text: x.message, readByManager: x.read_by_manager, readByCustomer: x.read_by_customer, createdAt: x.created_at }));
-        // Chat refresh: once a table's visit is complete (it has orders and
-        // none are active), clear its whole chat 2 minutes after the visit
-        // ended, so the next guest starts fresh. The 2 minutes are measured
-        // on THIS device's clock from the moment the visit was first seen
-        // complete — never from the database's served_at — so a clock
-        // difference between the device and the database can never clear
-        // the chat early.
-        const refreshTables = new Set();
-        TABLES.forEach((t) => {
-          const tOrders = (o || []).filter((x) => x.table_no === t);
-          const allDone = tOrders.length > 0 && tOrders.every((x) => ['served', 'rejected'].includes(x.status));
-          if (!allDone) { delete servedSeenAt.current[t]; return; }
-          if (!servedSeenAt.current[t]) servedSeenAt.current[t] = Date.now();
-          if (Date.now() - servedSeenAt.current[t] > 2 * 60 * 1000) refreshTables.add(t);
-        });
-        if (refreshTables.size) {
-          const dropIds = mapped.filter((m) => refreshTables.has(m.table)).map((m) => m.id);
-          setMessages(mapped.filter((m) => !refreshTables.has(m.table)));
-          if (dropIds.length) supabase.from('chat_messages').delete().in('id', dropIds).then(() => {});
-        } else {
-          setMessages(mapped);
-        }
-      }
-    } catch { /* chat load failed — next poll retries */ }
+    }
   }, []);
 
   useEffect(() => { fetchData(); const t = setInterval(fetchData, 3000); return () => clearInterval(t); }, [fetchData]);
